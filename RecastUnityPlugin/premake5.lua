@@ -148,7 +148,7 @@ project "RecastUnityPlugin"
 	}
 
 	-- distribute executable in RecastUnityPlugin/Bin directory
-	targetdir "Bin"
+	targetdir "../../../"
 
 	-- linux library cflags and libs
 	filter "system:linux"
