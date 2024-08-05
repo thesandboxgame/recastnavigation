@@ -6,6 +6,7 @@
 #include "DetourNavMesh.h"
 #include "NavMeshBuildConfig.h"
 #include "NavMeshInputGeometry.h"
+#include "Recast.h"
 
 // // 1u << 8 to 1u << 28 are free to use
 // static const unsigned int DT_HEIGHT_FIELD_FAILED = 1u << 14;
@@ -32,12 +33,16 @@ public:
 	static void Dispose();
 
 	static bool IsInitialized();
-
+		
 	static dtStatus CreateNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
 
 	static void DisposeNavMesh(void*& allocatedNavMesh);
 
+	static dtStatus CreateTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
+		const float* bmin, const float* bmax,
+		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
+	
 	static dtStatus CreateNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
 
 	static void DisposeNavMeshQuery(void*& allocatedNavMeshQuery);
@@ -48,6 +53,14 @@ private:
 
 	/// Free the navmeshes and the navmesh queries.
 	void DisposeData();
+
+	static dtStatus BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
+		const float* bmin, const float* bmax,
+		const NavMeshInputGeometry& inputGeometry, rcContext& context);
+
+	static unsigned char* BuildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
+		const float* bmin, const float* bmax,
+		const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context);
 	
 	/// The instance of the singleton.
 	static RecastUnityPluginManager* s_instance;
