@@ -51,13 +51,18 @@ void RecastUnityPluginManager::DisposeData()
 
 // TODO: Make the tiled mesh version
 // More or less copied from Sample_SoloMesh.cpp
-dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig config, const float* bmin, const float* bmax,
-	const float* verts, int nverts, const int* tris, int ntris,	void*& allocatedNavMesh)
+dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
+	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh)
 {
 	if (!IsInitialized())
 	{
 		return DT_FAILURE;
 	}
+
+	const float* verts = inputGeometry.vertices;
+	int nverts = inputGeometry.verticesCount;
+	const int* tris = inputGeometry.triangles;
+	int ntris = inputGeometry.trianglesCount;
 	
 	//
 	// Step 1. Initialize build config.

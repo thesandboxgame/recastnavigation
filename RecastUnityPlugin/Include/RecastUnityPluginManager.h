@@ -5,6 +5,7 @@
 
 #include "DetourNavMesh.h"
 #include "NavMeshBuildConfig.h"
+#include "NavMeshInputGeometry.h"
 
 // // 1u << 8 to 1u << 28 are free to use
 // static const unsigned int DT_HEIGHT_FIELD_FAILED = 1u << 14;
@@ -32,9 +33,8 @@ public:
 
 	static bool IsInitialized();
 
-	static dtStatus CreateNavMesh(const NavMeshBuildConfig config, const float* bmin, const float* bmax,
-		const float* verts, int nverts, const int* tris, int ntris,
-		void*& allocatedNavMesh);
+	static dtStatus CreateNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
+		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
 
 	static void DisposeNavMesh(void*& allocatedNavMesh);
 

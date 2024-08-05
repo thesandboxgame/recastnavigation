@@ -36,9 +36,9 @@ extern "C"
 	}
 	
 	// Allocate Navmesh 
-	DllExport dtStatus CreateNavMesh(const void* config, const float* bmin, const float* bmax, const float* verts, int nverts, const int* tris, int ntris, void*& allocatedNavMesh)
+	DllExport dtStatus CreateNavMesh(const void* config, const float* bmin, const float* bmax, const void* inputGeometry, void*& allocatedNavMesh)
 	{
-		return RecastUnityPluginManager::CreateNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, verts, nverts, tris, ntris, allocatedNavMesh);
+		return RecastUnityPluginManager::CreateNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
 	}
 
 	// Dispose Navmesh
