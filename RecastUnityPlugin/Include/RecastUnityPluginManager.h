@@ -42,7 +42,10 @@ public:
 
 	static dtStatus createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
-		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
+		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int* tilesNumber);
+
+	static void addTile(int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh);
 	
 	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
 
@@ -56,8 +59,8 @@ private:
 	void disposeData();
 
 	static dtStatus BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
-		const float* bmin, const float* bmax,
-		const NavMeshInputGeometry& inputGeometry, rcContext& context);
+	                              const float* bmin, const float* bmax,
+	                              const NavMeshInputGeometry& inputGeometry, rcContext& context);
 
 	static unsigned char* buildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,

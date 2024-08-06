@@ -296,9 +296,9 @@ dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& confi
 }
 
 // More or less copied from Sample_TileMesh.cpp
-dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
+dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh)
+	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int* tilesNumber)
 {
 	if (!isInitialized())
 	{
@@ -325,6 +325,8 @@ dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& c
 	const int ts = (int)tileSize;
 	const int tw = (gw + ts-1) / ts;
 	const int th = (gh + ts-1) / ts;
+	tilesNumber[0] = tw;
+	tilesNumber[1] = th;
 
 	// Max tiles and max polys affect how the tile IDs are caculated.
 	// There are 22 bits available for identifying a tile and a polygon.
@@ -363,6 +365,45 @@ dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& c
 	return DT_SUCCESS;
 }
 
+void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh)
+{
+	int gw = 0, gh = 0;
+	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
+	const int ts = (int)tileSize;
+	const float tcs = tileSize * config.cs;
+
+	float lastBuiltTileBmin[3];
+	float lastBuiltTileBmax[3];
+
+	int x = tileCoordinate[0];
+	int y = tileCoordinate[1];
+
+	// TODO: remove the code duplication
+	lastBuiltTileBmin[0] = bmin[0] + x*tcs;
+	lastBuiltTileBmin[1] = bmin[1];
+	lastBuiltTileBmin[2] = bmin[2] + y*tcs;
+			
+	lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
+	lastBuiltTileBmax[1] = bmax[1];
+	lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
+
+	int dataSize = 0;
+	rcContext context;
+	unsigned char* data = buildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
+	if (data)
+	{
+		// TODO: we should not need to remove the previous data, because there should not be one.
+		// Remove any previous data (navmesh owns and deletes the data).
+		navMesh->removeTile(navMesh->getTileRefAt(x,y,0),0,0);
+		// Let the navmesh own the data.
+		dtStatus status = navMesh->addTile(data,dataSize,DT_TILE_FREE_DATA,0,0);
+		if (dtStatusFailed(status))
+			// TODO : do we need to return here in case there is a failure?
+			dtFree(data);
+	}
+}
+
 // copied from Sample_TileMesh::buildAllTiles()
 dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
@@ -382,6 +423,7 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 	{
 		for (int x = 0; x < tw; ++x)
 		{
+			// TODO: remove the code duplication
 			lastBuiltTileBmin[0] = bmin[0] + x*tcs;
 			lastBuiltTileBmin[1] = bmin[1];
 			lastBuiltTileBmin[2] = bmin[2] + y*tcs;
@@ -394,9 +436,8 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 			unsigned char* data = buildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
 			if (data)
 			{
-				// TODO: we should not need to remove the previous data, because there should not be one.
-				// // Remove any previous data (navmesh owns and deletes the data).
-				// navMesh->removeTile(navMesh->getTileRefAt(x,y,0),0,0);
+				// Remove any previous data (navmesh owns and deletes the data).
+				navMesh->removeTile(navMesh->getTileRefAt(x,y,0),0,0);
 				// Let the navmesh own the data.
 				dtStatus status = navMesh->addTile(data,dataSize,DT_TILE_FREE_DATA,0,0);
 				if (dtStatusFailed(status))
@@ -720,4 +761,3 @@ void RecastUnityPluginManager::disposeNavMeshQuery(void*& allocatedNavMeshQuery)
 	dtFreeNavMeshQuery(navMeshQuery);
 	allocatedNavMeshQuery = nullptr;
 }
-

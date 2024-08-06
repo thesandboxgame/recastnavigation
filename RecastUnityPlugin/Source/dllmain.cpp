@@ -43,12 +43,18 @@ extern "C"
 
 	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
+		const void* inputGeometry, void*& allocatedNavMesh, int* tilesCount)
+	{
+		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh, tilesCount);
+	}
+
+	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
+		const float* bmin, const float* bmax,
 		const void* inputGeometry, void*& allocatedNavMesh)
 	{
-		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
+		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), (dtNavMesh*)allocatedNavMesh);
 	}
 	
-
 	// Dispose Navmesh
 	DllExport void DisposeNavMesh(void*& allocatedNavMesh)
 	{
