@@ -397,10 +397,12 @@ void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildCo
 		// Remove any previous data (navmesh owns and deletes the data).
 		navMesh->removeTile(navMesh->getTileRefAt(x,y,0),0,0);
 		// Let the navmesh own the data.
+		navMesh->mutex.lock();
 		dtStatus status = navMesh->addTile(data,dataSize,DT_TILE_FREE_DATA,0,0);
 		if (dtStatusFailed(status))
 			// TODO : do we need to return here in case there is a failure?
 			dtFree(data);
+		navMesh->mutex.unlock();
 	}
 }
 
