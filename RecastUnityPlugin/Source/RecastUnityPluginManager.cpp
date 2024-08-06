@@ -34,10 +34,10 @@ inline unsigned int ilog2(unsigned int v)
 }
 
 
-bool RecastUnityPluginManager::Initialize()
+bool RecastUnityPluginManager::initialize()
 {
 	// TODO add a locking mechanism? Even though these methods should be called only on the main thread.
-	if (!IsInitialized())
+	if (!isInitialized())
 	{
 		s_instance = new RecastUnityPluginManager();
 		return true;
@@ -46,23 +46,23 @@ bool RecastUnityPluginManager::Initialize()
 	return false;
 }
 
-bool RecastUnityPluginManager::IsInitialized()
+bool RecastUnityPluginManager::isInitialized()
 {
 	return s_instance != nullptr;
 }
 
-void RecastUnityPluginManager::Dispose()
+void RecastUnityPluginManager::dispose()
 {
 	// TODO add a locking mechanism? Even though these methods should be called only on the main thread.
-	if (IsInitialized())
+	if (isInitialized())
 	{
-		s_instance->DisposeData();
+		s_instance->disposeData();
 		delete s_instance;
 		s_instance = nullptr;
 	}
 }
 
-void RecastUnityPluginManager::DisposeData()
+void RecastUnityPluginManager::disposeData()
 {
 	for (auto navmesh : m_navMeshes)
 	{
@@ -78,10 +78,10 @@ void RecastUnityPluginManager::DisposeData()
 }
 
 // More or less copied from Sample_SoloMesh.cpp
-dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
+dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
 	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh)
 {
-	if (!IsInitialized())
+	if (!isInitialized())
 	{
 		return DT_FAILURE;
 	}
@@ -296,11 +296,11 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 }
 
 // More or less copied from Sample_TileMesh.cpp
-dtStatus RecastUnityPluginManager::CreateTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
+dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 	const float* bmin, const float* bmax,
 	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh)
 {
-	if (!IsInitialized())
+	if (!isInitialized())
 	{
 		return DT_FAILURE;
 	}
@@ -391,7 +391,7 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 			lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
 			
 			int dataSize = 0;
-			unsigned char* data = BuildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
+			unsigned char* data = buildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
 			if (data)
 			{
 				// TODO: we should not need to remove the previous data, because there should not be one.
@@ -409,7 +409,7 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 	return DT_SUCCESS;
 }
 
-unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
+unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
 	const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context)
 {
@@ -669,7 +669,7 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	return navData;
 }
 
-void RecastUnityPluginManager::DisposeNavMesh(void*& allocatedNavMesh)
+void RecastUnityPluginManager::disposeNavMesh(void*& allocatedNavMesh)
 {
 	if (allocatedNavMesh == nullptr)
 	{
@@ -688,7 +688,7 @@ void RecastUnityPluginManager::DisposeNavMesh(void*& allocatedNavMesh)
 }
 
 
-dtStatus RecastUnityPluginManager::CreateNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery)
+dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery)
 {
 	auto navMeshQuery = dtAllocNavMeshQuery();
 	if (navMeshQuery != nullptr)
@@ -703,7 +703,7 @@ dtStatus RecastUnityPluginManager::CreateNavMeshQuery(const void* allocatedNavMe
 	return DT_FAILURE;
 }
 
-void RecastUnityPluginManager::DisposeNavMeshQuery(void*& allocatedNavMeshQuery)
+void RecastUnityPluginManager::disposeNavMeshQuery(void*& allocatedNavMeshQuery)
 {
 	if (allocatedNavMeshQuery == nullptr)
 	{

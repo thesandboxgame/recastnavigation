@@ -28,38 +28,38 @@ class RecastUnityPluginManager
 public:
 
 	/// Creates the singleton instance.
-	static bool Initialize();
+	static bool initialize();
 	
 	/// Disposes the singleton and free its data.
-	static void Dispose();
+	static void dispose();
 
-	static bool IsInitialized();
+	static bool isInitialized();
 		
-	static dtStatus CreateNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
+	static dtStatus createNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
 
-	static void DisposeNavMesh(void*& allocatedNavMesh);
+	static void disposeNavMesh(void*& allocatedNavMesh);
 
-	static dtStatus CreateTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
+	static dtStatus createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
 	
-	static dtStatus CreateNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
+	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
 
-	static void DisposeNavMeshQuery(void*& allocatedNavMeshQuery);
+	static void disposeNavMeshQuery(void*& allocatedNavMeshQuery);
 	
 private:
 	/// Made it private so that nobody can call the constructor outside of this class.
 	RecastUnityPluginManager() {}
 
 	/// Free the navmeshes and the navmesh queries.
-	void DisposeData();
+	void disposeData();
 
 	static dtStatus BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, rcContext& context);
 
-	static unsigned char* BuildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
+	static unsigned char* buildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context);
 	

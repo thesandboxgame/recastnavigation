@@ -27,25 +27,25 @@ extern "C"
 	
 	DllExport bool Initialize()
 	{
-		return RecastUnityPluginManager::Initialize();
+		return RecastUnityPluginManager::initialize();
 	}
 
 	DllExport void Dispose()
 	{
-		RecastUnityPluginManager::Dispose();
+		RecastUnityPluginManager::dispose();
 	}
 	
 	// Allocate Navmesh 
 	DllExport dtStatus CreateNavMesh(const void* config, const float* bmin, const float* bmax, const void* inputGeometry, void*& allocatedNavMesh)
 	{
-		return RecastUnityPluginManager::CreateNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
+		return RecastUnityPluginManager::createNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
 	}
 
 	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
 		const void* inputGeometry, void*& allocatedNavMesh)
 	{
-		return RecastUnityPluginManager::CreateTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
+		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
 	}
 	
 
@@ -54,14 +54,14 @@ extern "C"
 	{
 		if (allocatedNavMesh != nullptr)
 		{
-			RecastUnityPluginManager::DisposeNavMesh(allocatedNavMesh);
+			RecastUnityPluginManager::disposeNavMesh(allocatedNavMesh);
 		}
 	}
 	
 	// Create Navmesh query (from a specific navmesh)
 	DllExport dtStatus CreateNavMeshQuery(const void* navMesh, int maxNodes, void*& allocatedNavMeshQuery)
 	{
-		return RecastUnityPluginManager::CreateNavMeshQuery(navMesh, maxNodes, allocatedNavMeshQuery);
+		return RecastUnityPluginManager::createNavMeshQuery(navMesh, maxNodes, allocatedNavMeshQuery);
 	}
 	
 	// Dispose Navmesh query
@@ -69,7 +69,7 @@ extern "C"
 	{
 		if (allocatedNavMeshQuery != nullptr)
 		{
-			RecastUnityPluginManager::DisposeNavMeshQuery(allocatedNavMeshQuery);
+			RecastUnityPluginManager::disposeNavMeshQuery(allocatedNavMeshQuery);
 		}
 	}
 
