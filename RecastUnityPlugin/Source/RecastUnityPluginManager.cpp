@@ -4,6 +4,7 @@
 #include "DetourNavMeshBuilder.h"
 #include "DetourNavMeshQuery.h"
 #include "NavMeshBuildData.h"
+#include "NavMeshBuildUtility.h"
 #include "Recast.h"
 
 RecastUnityPluginManager* RecastUnityPluginManager::s_instance= nullptr;
@@ -122,26 +123,9 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	//
 	// Step 2. Rasterize input polygon soup.
 	//
-	// Allocate voxel heightfield where we rasterize our input data to.
-	buildData.solid = rcAllocHeightfield();
-	if (!buildData.solid)
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'solid'.");
-		return DT_FAILURE;
-	}
-	if (!rcCreateHeightfield(&context, *buildData.solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not create solid heightfield.");
-		return DT_FAILURE;
-	}
 	
-	// Allocate array that can hold triangle area types.
-	// If you have multiple meshes you need to process, allocate
-	// and array which can hold the max number of triangles you need to process.
-	buildData.triareas = new unsigned char[ntris];
-	if (!buildData.triareas)
+	if (NavMeshBuildUtility::prepareTriangleRasterization(rcConfig, ntris, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'm_triareas' (%d).", ntris);
 		return DT_FAILURE;
 	}
 	
@@ -159,125 +143,36 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	//
 	// Step 3. Filter walkable surfaces.
 	//
-	
-	// Once all geometry is rasterized, we do initial pass of filtering to
-	// remove unwanted overhangs caused by the conservative rasterization
-	// as well as filter spans where the character cannot possibly stand.
-	if (config.filterLowHangingObstacles)
-		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *buildData.solid);
-	if (config.filterLedgeSpans)
-		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid);
-	if (config.filterWalkableLowHeightSpans)
-		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *buildData.solid);
 
+	NavMeshBuildUtility::filterWalkingSurfaces(config.filterLowHangingObstacles, config.filterLedgeSpans, config.filterWalkableLowHeightSpans,
+		rcConfig, buildData, context);
+	
 	//
 	// Step 4. Partition walkable surface to simple regions.
 	//
-
-	// Compact the heightfield so that it is faster to handle from now on.
-	// This will result more cache coherent data as well as the neighbours
-	// between walkable cells will be calculated.
-	buildData.chf = rcAllocCompactHeightfield();
-	if (!buildData.chf )
+	
+	if (NavMeshBuildUtility::preparePartionning(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'chf'.");
 		return DT_FAILURE;
 	}
-	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid, *buildData.chf ))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not build compact data.");
-		return DT_FAILURE;
-	}
-
-	// Erode the walkable area by agent radius.
-	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *buildData.chf ))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not erode.");
-		return DT_FAILURE;
-	}
-
+	
 	// TODO: for now there is nothing to mark areas, maybe later.
 	// (Optional) Mark areas.
 	// const ConvexVolume* vols = m_geom->getConvexVolumes();
 	// for (int i  = 0; i < m_geom->getConvexVolumeCount(); ++i)
 	// 	rcMarkConvexPolyArea(m_ctx, vols[i].verts, vols[i].nverts, vols[i].hmin, vols[i].hmax, (unsigned char)vols[i].area, *m_chf);
 
-	// Partition the heightfield so that we can use simple algorithm later to triangulate the walkable areas.
-	// There are 3 partitioning methods, each with some pros and cons:
-	// 1) Watershed partitioning
-	//   - the classic Recast partitioning
-	//   - creates the nicest tessellation
-	//   - usually slowest
-	//   - partitions the heightfield into nice regions without holes or overlaps
-	//   - the are some corner cases where this method creates produces holes and overlaps
-	//      - holes may appear when a small obstacles is close to large open area (triangulation can handle this)
-	//      - overlaps may occur if you have narrow spiral corridors (i.e stairs), this make triangulation to fail
-	//   * generally the best choice if you precompute the navmesh, use this if you have large open areas
-	// 2) Monotone partitioning
-	//   - fastest
-	//   - partitions the heightfield into regions without holes and overlaps (guaranteed)
-	//   - creates long thin polygons, which sometimes causes paths with detours
-	//   * use this if you want fast navmesh generation
-	// 3) Layer partitoining
-	//   - quite fast
-	//   - partitions the heighfield into non-overlapping regions
-	//   - relies on the triangulation code to cope with holes (thus slower than monotone partitioning)
-	//   - produces better triangles than monotone partitioning
-	//   - does not have the corner cases of watershed partitioning
-	//   - can be slow and create a bit ugly tessellation (still better than monotone)
-	//     if you have large open areas with small obstacles (not a problem if you use tiles)
-	//   * good choice to use for tiled navmesh with medium and small sized tiles
-
-	if (config.partitionType == PARTITION_WATERSHED)
+	if (NavMeshBuildUtility::buildRegions(config.partitionType, 0, rcConfig, buildData, context) == DT_FAILURE)
 	{
-		// Prepare for region partitioning, by calculating distance field along the walkable surface.
-		if (!rcBuildDistanceField(&context, *buildData.chf))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build distance field.");
-			return DT_FAILURE;
-		}
-		
-		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildRegions(&context, *buildData.chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build watershed regions.");
-			return DT_FAILURE;
-		}
-	}
-	else if (config.partitionType == PARTITION_MONOTONE)
-	{
-		// Partition the walkable surface into simple regions without holes.
-		// Monotone partitioning does not need distancefield.
-		if (!rcBuildRegionsMonotone(&context, *buildData.chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build monotone regions.");
-			return DT_FAILURE;
-		}
-	}
-	else // PARTITION_LAYERS
-	{
-		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildLayerRegions(&context, *buildData.chf, 0, rcConfig.minRegionArea))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build layer regions.");
-			return DT_FAILURE;
-		}
+		return DT_FAILURE;
 	}
 
 	//
 	// Step 5. Trace and simplify region contours.
 	//
 	
-	// Create contours.
-	buildData.cset = rcAllocContourSet();
-	if (!buildData.cset)
+	if (NavMeshBuildUtility::createContours(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'cset'.");
-		return DT_FAILURE;
-	}
-	if (!rcBuildContours(&context, *buildData.chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *buildData.cset))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not create contours.");
 		return DT_FAILURE;
 	}
 
@@ -285,32 +180,17 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// Step 6. Build polygons mesh from contours.
 	//
 	
-	// Build polygon navmesh from the contours.
-	buildData.pmesh = rcAllocPolyMesh();
-	if (!buildData.pmesh)
+	if (NavMeshBuildUtility::buildMesh(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmesh'.");
-		return DT_FAILURE;
-	}
-	if (!rcBuildPolyMesh(&context, *buildData.cset, rcConfig.maxVertsPerPoly, *buildData.pmesh))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not triangulate contours.");
 		return DT_FAILURE;
 	}
 	
 	//
 	// Step 7. Create detail mesh which allows to access approximate height on each polygon.
 	//
-	buildData.dmesh = rcAllocPolyMeshDetail();
-	if (!buildData.dmesh)
+	
+	if (NavMeshBuildUtility::buildDetailMesh(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmdtl'.");
-		return DT_FAILURE;
-	}
-
-	if (!rcBuildPolyMeshDetail(&context, *buildData.pmesh, *buildData.chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *buildData.dmesh))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not build detail mesh.");
 		return DT_FAILURE;
 	}
 	
@@ -403,7 +283,10 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 		context.log(RC_LOG_ERROR, "Could not init Detour navmesh");
 		return DT_FAILURE;
 	}
-		
+
+	// The nav data should not be disposed
+	buildData.ownsNavData = false;
+	
 	// Store the allocated navmesh.
 	s_instance->m_navMeshes.push_back(navMesh);
 
@@ -598,32 +481,6 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	rcConfig.bmin[2] -= rcConfig.borderSize*rcConfig.cs;
 	rcConfig.bmax[0] += rcConfig.borderSize*rcConfig.cs;
 	rcConfig.bmax[2] += rcConfig.borderSize*rcConfig.cs;
-	
-	//
-	// Step 2. Rasterize input polygon soup.
-	//
-	// Allocate voxel heightfield where we rasterize our input data to.
-	buildData.solid = rcAllocHeightfield();
-	if (!buildData.solid)
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'solid'.");
-		return nullptr;
-	}
-	if (!rcCreateHeightfield(&context, *buildData.solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not create solid heightfield.");
-		return nullptr;
-	}
-
-	// Allocate array that can hold triangle area types.
-	// If you have multiple meshes you need to process, allocate
-	// and array which can hold the max number of triangles you need to process.
-	buildData.triareas = new unsigned char[buildData.chunkyMesh->maxTrisPerChunk];
-	if (!buildData.triareas)
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'm_triareas' (%d).", ntris);
-		return nullptr;
-	}
 
 	float tbmin[2], tbmax[2];
 	tbmin[0] = rcConfig.bmin[0];
@@ -633,6 +490,16 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	int cid[512];// TODO: Make grow when returning too many items.
 	const int ncid = rcGetChunksOverlappingRect(buildData.chunkyMesh, tbmin, tbmax, cid, 512);
 	if (!ncid)
+	{
+		return nullptr;
+	}
+	
+	//
+	// Step 2. Rasterize input polygon soup.
+	//
+
+	dtStatus status = NavMeshBuildUtility::prepareTriangleRasterization(rcConfig, buildData.chunkyMesh->maxTrisPerChunk, buildData, context);
+	if (status == DT_FAILURE)
 	{
 		return nullptr;
 	}
@@ -660,40 +527,15 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// Step 3. Filter walkable surfaces.
 	//
 
-	// Once all geometry is rasterized, we do initial pass of filtering to
-	// remove unwanted overhangs caused by the conservative rasterization
-	// as well as filter spans where the character cannot possibly stand.
-	if (config.filterLowHangingObstacles)
-		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *buildData.solid);
-	if (config.filterLedgeSpans)
-		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid);
-	if (config.filterWalkableLowHeightSpans)
-		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *buildData.solid);
+	NavMeshBuildUtility::filterWalkingSurfaces(config.filterLowHangingObstacles, config.filterLedgeSpans, config.filterWalkableLowHeightSpans,
+		rcConfig, buildData, context);
 
 	//
 	// Step 4. Partition walkable surface to simple regions.
 	//
 
-	// Compact the heightfield so that it is faster to handle from now on.
-	// This will result more cache coherent data as well as the neighbours
-	// between walkable cells will be calculated.
-	buildData.chf = rcAllocCompactHeightfield();
-	if (!buildData.chf)
+	if (NavMeshBuildUtility::preparePartionning(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'chf'.");
-		return nullptr;
-	}
-	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid, *buildData.chf))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not build compact data.");
-		return nullptr;
-	}
-	
-	// Erode the walkable area by agent radius.
-	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *buildData.chf))
-	{
-		rcFreeCompactHeightfield(buildData.chf);
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not erode.");
 		return nullptr;
 	}
 
@@ -703,79 +545,17 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// for (int i  = 0; i < m_geom->getConvexVolumeCount(); ++i)
 	// 	rcMarkConvexPolyArea(m_ctx, vols[i].verts, vols[i].nverts, vols[i].hmin, vols[i].hmax, (unsigned char)vols[i].area, *m_chf);
 
-	// Partition the heightfield so that we can use simple algorithm later to triangulate the walkable areas.
-	// There are 3 martitioning methods, each with some pros and cons:
-	// 1) Watershed partitioning
-	//   - the classic Recast partitioning
-	//   - creates the nicest tessellation
-	//   - usually slowest
-	//   - partitions the heightfield into nice regions without holes or overlaps
-	//   - the are some corner cases where this method creates produces holes and overlaps
-	//      - holes may appear when a small obstacles is close to large open area (triangulation can handle this)
-	//      - overlaps may occur if you have narrow spiral corridors (i.e stairs), this make triangulation to fail
-	//   * generally the best choice if you precompute the nacmesh, use this if you have large open areas
-	// 2) Monotone partioning
-	//   - fastest
-	//   - partitions the heightfield into regions without holes and overlaps (guaranteed)
-	//   - creates long thin polygons, which sometimes causes paths with detours
-	//   * use this if you want fast navmesh generation
-	// 3) Layer partitoining
-	//   - quite fast
-	//   - partitions the heighfield into non-overlapping regions
-	//   - relies on the triangulation code to cope with holes (thus slower than monotone partitioning)
-	//   - produces better triangles than monotone partitioning
-	//   - does not have the corner cases of watershed partitioning
-	//   - can be slow and create a bit ugly tessellation (still better than monotone)
-	//     if you have large open areas with small obstacles (not a problem if you use tiles)
-	//   * good choice to use for tiled navmesh with medium and small sized tiles
-
-	if (config.partitionType == PARTITION_WATERSHED)
+	if (NavMeshBuildUtility::buildRegions(config.partitionType, rcConfig.borderSize, rcConfig, buildData, context) == DT_FAILURE)
 	{
-		// Prepare for region partitioning, by calculating distance field along the walkable surface.
-		if (!rcBuildDistanceField(&context, *buildData.chf))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build distance field.");
-			return nullptr;
-		}
-		
-		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildRegions(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build watershed regions.");
-			return nullptr;
-		}
-	}
-	else if (config.partitionType == PARTITION_MONOTONE)
-	{
-		// Partition the walkable surface into simple regions without holes.
-		// Monotone partitioning does not need distancefield.
-		if (!rcBuildRegionsMonotone(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
-		{
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build monotone regions.");
-			return nullptr;
-		}
-	}
-	else // SAMPLE_PARTITION_LAYERS
-	{
-		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildLayerRegions(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea))
-		{
-			rcFreeCompactHeightfield(buildData.chf);
-			context.log(RC_LOG_ERROR, "buildNavigation: Could not build layer regions.");
-			return nullptr;
-		}
-	}
-
-	// Create contours.
-	buildData.cset = rcAllocContourSet();
-	if (!buildData.cset)
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'cset'.");
 		return nullptr;
 	}
-	if (!rcBuildContours(&context, *buildData.chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *buildData.cset))
+
+	//
+	// Step 5. Trace and simplify region contours.
+	//
+	
+	if (NavMeshBuildUtility::createContours(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not create contours.");
 		return nullptr;
 	}
 	
@@ -788,32 +568,17 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// Step 6. Build polygons mesh from contours.
 	//
 
-	// Build polygon navmesh from the contours.
-	buildData.pmesh = rcAllocPolyMesh();
-	if (!buildData.pmesh)
+	if (NavMeshBuildUtility::buildMesh(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmesh'.");
-		return nullptr;
-	}
-	if (!rcBuildPolyMesh(&context, *buildData.cset, rcConfig.maxVertsPerPoly, *buildData.pmesh))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not triangulate contours.");
 		return nullptr;
 	}
 
 	//
 	// Step 7. Create detail mesh which allows to access approximate height on each polygon.
 	//
-	buildData.dmesh = rcAllocPolyMeshDetail();
-	if (!buildData.dmesh)
+	
+	if (NavMeshBuildUtility::buildDetailMesh(rcConfig, buildData, context) == DT_FAILURE)
 	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmdtl'.");
-		return nullptr;
-	}
-
-	if (!rcBuildPolyMeshDetail(&context, *buildData.pmesh, *buildData.chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *buildData.dmesh))
-	{
-		context.log(RC_LOG_ERROR, "buildNavigation: Could not build detail mesh.");
 		return nullptr;
 	}
 
@@ -896,7 +661,8 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 		}		
 	}
 
-	buildData.disposeNavData = false;
+	// The NavData is returned, it should not get disposed along with buildData.
+	buildData.ownsNavData = false;
 	
 	dataSize = navDataSize;
 	unsigned char* navData = buildData.navData;

@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "ChunkyTriMesh.h"
 #include "Recast.h"
+#include "DetourAlloc.h"
 
 /// Contains the intermediate data used when building a NavMesh.
 /// Simplifies the memory freeing.
@@ -56,7 +57,7 @@ struct NavMeshBuildData
 			dmesh = nullptr;
 		}
 
-		if (disposeNavData && navData != nullptr)
+		if (ownsNavData && navData != nullptr)
 		{
 			dtFree(navData);
 			navData = nullptr;
@@ -71,7 +72,7 @@ struct NavMeshBuildData
 	rcPolyMeshDetail* dmesh;
 	unsigned char* navData;
 	rcChunkyTriMesh* chunkyMesh;
-	bool disposeNavData;
+	bool ownsNavData;
 
 private:
 	// Explicitly disabled copy constructor and copy assignment operator.
