@@ -5,6 +5,7 @@
 
 #include "DetourNavMesh.h"
 #include "NavMeshBuildConfig.h"
+#include "NavMeshBuildData.h"
 #include "NavMeshInputGeometry.h"
 #include "Recast.h"
 

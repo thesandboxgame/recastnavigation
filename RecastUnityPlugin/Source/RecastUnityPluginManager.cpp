@@ -3,6 +3,7 @@
 #include "ChunkyTriMesh.h"
 #include "DetourNavMeshBuilder.h"
 #include "DetourNavMeshQuery.h"
+#include "NavMeshBuildData.h"
 #include "Recast.h"
 
 RecastUnityPluginManager* RecastUnityPluginManager::s_instance= nullptr;
@@ -84,6 +85,7 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 		return DT_FAILURE;
 	}
 
+	NavMeshBuildData buildData;
 	const float* verts = inputGeometry.vertices;
 	int nverts = inputGeometry.verticesCount;
 	const int* tris = inputGeometry.triangles;
@@ -121,15 +123,14 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// Step 2. Rasterize input polygon soup.
 	//
 	// Allocate voxel heightfield where we rasterize our input data to.
-	rcHeightfield* solid = rcAllocHeightfield();
-	if (!solid)
+	buildData.solid = rcAllocHeightfield();
+	if (!buildData.solid)
 	{
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'solid'.");
 		return DT_FAILURE;
 	}
-	if (!rcCreateHeightfield(&context, *solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
+	if (!rcCreateHeightfield(&context, *buildData.solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
 	{
-		rcFreeHeightField(solid);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not create solid heightfield.");
 		return DT_FAILURE;
 	}
@@ -137,10 +138,9 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// Allocate array that can hold triangle area types.
 	// If you have multiple meshes you need to process, allocate
 	// and array which can hold the max number of triangles you need to process.
-	unsigned char* triareas = new unsigned char[ntris];
-	if (!triareas)
+	buildData.triareas = new unsigned char[ntris];
+	if (!buildData.triareas)
 	{
-		rcFreeHeightField(solid);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'm_triareas' (%d).", ntris);
 		return DT_FAILURE;
 	}
@@ -148,17 +148,13 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// Find triangles which are walkable based on their slope and rasterize them.
 	// If your input data is multiple meshes, you can transform them here, calculate
 	// the are type for each of the meshes and rasterize them.
-	memset(triareas, 0, ntris*sizeof(unsigned char));
-	rcMarkWalkableTriangles(&context, rcConfig.walkableSlopeAngle, verts, nverts, tris, ntris, triareas);
-	if (!rcRasterizeTriangles(&context, verts, nverts, tris, triareas, ntris, *solid, rcConfig.walkableClimb))
+	memset(buildData.triareas, 0, ntris*sizeof(unsigned char));
+	rcMarkWalkableTriangles(&context, rcConfig.walkableSlopeAngle, verts, nverts, tris, ntris, buildData.triareas);
+	if (!rcRasterizeTriangles(&context, verts, nverts, tris, buildData.triareas, ntris, *buildData.solid, rcConfig.walkableClimb))
 	{
-		rcFreeHeightField(solid);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not rasterize triangles.");
 		return DT_FAILURE;
 	}
-
-	delete [] triareas;
-	triareas = nullptr;
 	
 	//
 	// Step 3. Filter walkable surfaces.
@@ -168,11 +164,11 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// remove unwanted overhangs caused by the conservative rasterization
 	// as well as filter spans where the character cannot possibly stand.
 	if (config.filterLowHangingObstacles)
-		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *solid);
+		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *buildData.solid);
 	if (config.filterLedgeSpans)
-		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *solid);
+		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid);
 	if (config.filterWalkableLowHeightSpans)
-		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *solid);
+		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *buildData.solid);
 
 	//
 	// Step 4. Partition walkable surface to simple regions.
@@ -181,29 +177,21 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// Compact the heightfield so that it is faster to handle from now on.
 	// This will result more cache coherent data as well as the neighbours
 	// between walkable cells will be calculated.
-	rcCompactHeightfield* chf = rcAllocCompactHeightfield();
-	if (!chf)
+	buildData.chf = rcAllocCompactHeightfield();
+	if (!buildData.chf )
 	{
-		rcFreeHeightField(solid);
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'chf'.");
 		return DT_FAILURE;
 	}
-	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *solid, *chf))
+	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid, *buildData.chf ))
 	{
-		rcFreeHeightField(solid);
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not build compact data.");
 		return DT_FAILURE;
 	}
-	
-	rcFreeHeightField(solid);
-	solid = nullptr;
 
 	// Erode the walkable area by agent radius.
-	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *chf))
+	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *buildData.chf ))
 	{
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not erode.");
 		return DT_FAILURE;
 	}
@@ -243,17 +231,15 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	if (config.partitionType == PARTITION_WATERSHED)
 	{
 		// Prepare for region partitioning, by calculating distance field along the walkable surface.
-		if (!rcBuildDistanceField(&context, *chf))
+		if (!rcBuildDistanceField(&context, *buildData.chf))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build distance field.");
 			return DT_FAILURE;
 		}
 		
 		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildRegions(&context, *chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
+		if (!rcBuildRegions(&context, *buildData.chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build watershed regions.");
 			return DT_FAILURE;
 		}
@@ -262,9 +248,8 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	{
 		// Partition the walkable surface into simple regions without holes.
 		// Monotone partitioning does not need distancefield.
-		if (!rcBuildRegionsMonotone(&context, *chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
+		if (!rcBuildRegionsMonotone(&context, *buildData.chf, 0, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build monotone regions.");
 			return DT_FAILURE;
 		}
@@ -272,9 +257,8 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	else // PARTITION_LAYERS
 	{
 		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildLayerRegions(&context, *chf, 0, rcConfig.minRegionArea))
+		if (!rcBuildLayerRegions(&context, *buildData.chf, 0, rcConfig.minRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build layer regions.");
 			return DT_FAILURE;
 		}
@@ -285,17 +269,14 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	//
 	
 	// Create contours.
-	rcContourSet* cset = rcAllocContourSet();
-	if (!cset)
+	buildData.cset = rcAllocContourSet();
+	if (!buildData.cset)
 	{
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'cset'.");
 		return DT_FAILURE;
 	}
-	if (!rcBuildContours(&context, *chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *cset))
+	if (!rcBuildContours(&context, *buildData.chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *buildData.cset))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not create contours.");
 		return DT_FAILURE;
 	}
@@ -305,19 +286,14 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	//
 	
 	// Build polygon navmesh from the contours.
-	rcPolyMesh* pmesh = rcAllocPolyMesh();
-	if (!pmesh)
+	buildData.pmesh = rcAllocPolyMesh();
+	if (!buildData.pmesh)
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmesh'.");
 		return DT_FAILURE;
 	}
-	if (!rcBuildPolyMesh(&context, *cset, rcConfig.maxVertsPerPoly, *pmesh))
+	if (!rcBuildPolyMesh(&context, *buildData.cset, rcConfig.maxVertsPerPoly, *buildData.pmesh))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not triangulate contours.");
 		return DT_FAILURE;
 	}
@@ -325,31 +301,19 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	//
 	// Step 7. Create detail mesh which allows to access approximate height on each polygon.
 	//
-	rcPolyMeshDetail* dmesh = rcAllocPolyMeshDetail();
-	if (!dmesh)
+	buildData.dmesh = rcAllocPolyMeshDetail();
+	if (!buildData.dmesh)
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmdtl'.");
 		return DT_FAILURE;
 	}
 
-	if (!rcBuildPolyMeshDetail(&context, *pmesh, *chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *dmesh))
+	if (!rcBuildPolyMeshDetail(&context, *buildData.pmesh, *buildData.chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *buildData.dmesh))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
-		rcFreePolyMeshDetail(dmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not build detail mesh.");
 		return DT_FAILURE;
 	}
 	
-	rcFreeCompactHeightfield(chf);
-	chf = nullptr;
-	rcFreeContourSet(cset);
-	cset = nullptr;
-
 	// At this point the navigation mesh data is ready, you can access it from m_pmesh.
 	// See duDebugDrawPolyMesh or dtCreateNavMeshData as examples how to access the data.
 
@@ -357,15 +321,14 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	// (Optional) Step 8. Create Detour data from Recast poly mesh.
 	//
 
-	unsigned char* navData = 0;
+	buildData.navData = 0;
 	int navDataSize = 0;
-
 	
 	// Update poly flags from areas.
-	for (int i = 0; i < pmesh->npolys; ++i)
+	for (int i = 0; i < buildData.pmesh->npolys; ++i)
 	{
 		// We have to set a flag different from 0 for the tiles, otherwise it won't work (PassFilter will always return false)
-		pmesh->flags[i] = 1;
+		buildData.pmesh->flags[i] = 1;
 		// TODO: For now we don't set specific flags to areas
 		// if (pmesh->areas[i] == RC_WALKABLE_AREA)
 		// 	pmesh->areas[i] = SAMPLE_POLYAREA_GROUND;
@@ -388,18 +351,18 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 
 	dtNavMeshCreateParams params;
 	memset(&params, 0, sizeof(params));
-	params.verts = pmesh->verts;
-	params.vertCount = pmesh->nverts;
-	params.polys = pmesh->polys;
-	params.polyAreas = pmesh->areas;
-	params.polyFlags = pmesh->flags;
-	params.polyCount = pmesh->npolys;
-	params.nvp = pmesh->nvp;
-	params.detailMeshes = dmesh->meshes;
-	params.detailVerts = dmesh->verts;
-	params.detailVertsCount = dmesh->nverts;
-	params.detailTris = dmesh->tris;
-	params.detailTriCount = dmesh->ntris;
+	params.verts = buildData.pmesh->verts;
+	params.vertCount = buildData.pmesh->nverts;
+	params.polys = buildData.pmesh->polys;
+	params.polyAreas = buildData.pmesh->areas;
+	params.polyFlags = buildData.pmesh->flags;
+	params.polyCount = buildData.pmesh->npolys;
+	params.nvp = buildData.pmesh->nvp;
+	params.detailMeshes = buildData.dmesh->meshes;
+	params.detailVerts = buildData.dmesh->verts;
+	params.detailVertsCount = buildData.dmesh->nverts;
+	params.detailTris = buildData.dmesh->tris;
+	params.detailTriCount = buildData.dmesh->ntris;
 
 	// No offmesh connextions for now
 	params.offMeshConVerts = nullptr;
@@ -413,16 +376,14 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	params.walkableHeight = config.agentHeight;
 	params.walkableRadius = config.agentRadius;
 	params.walkableClimb = config.agentMaxClimb;
-	rcVcopy(params.bmin, pmesh->bmin);
-	rcVcopy(params.bmax, pmesh->bmax);
+	rcVcopy(params.bmin, buildData.pmesh->bmin);
+	rcVcopy(params.bmax, buildData.pmesh->bmax);
 	params.cs = rcConfig.cs;
 	params.ch = rcConfig.ch;
 	params.buildBvTree = true;
 	
-	if (!dtCreateNavMeshData(&params, &navData, &navDataSize))
+	if (!dtCreateNavMeshData(&params, &buildData.navData, &navDataSize))
 	{
-		rcFreePolyMesh(pmesh);
-		rcFreePolyMeshDetail(dmesh);
 		context.log(RC_LOG_ERROR, "Could not build Detour navmesh.");
 		return DT_FAILURE;
 	}
@@ -430,31 +391,19 @@ dtStatus RecastUnityPluginManager::CreateNavMesh(const NavMeshBuildConfig& confi
 	dtNavMesh* navMesh = dtAllocNavMesh();
 	if (!navMesh)
 	{
-		rcFreePolyMesh(pmesh);
-		rcFreePolyMeshDetail(dmesh);
-		dtFree(navData);
 		context.log(RC_LOG_ERROR, "Could not create Detour navmesh");
 		return DT_FAILURE;
 	}
 	
 	dtStatus status;
 	
-	status = navMesh->init(navData, navDataSize, DT_TILE_FREE_DATA);
+	status = navMesh->init(buildData.navData, navDataSize, DT_TILE_FREE_DATA);
 	if (dtStatusFailed(status))
 	{
-		rcFreePolyMesh(pmesh);
-		rcFreePolyMeshDetail(dmesh);
-		dtFree(navData);
 		context.log(RC_LOG_ERROR, "Could not init Detour navmesh");
 		return DT_FAILURE;
 	}
-
-	// Cleanup
-	rcFreePolyMesh(pmesh);
-	pmesh = nullptr;
-	rcFreePolyMeshDetail(dmesh);
-	dmesh = nullptr;
-	
+		
 	// Store the allocated navmesh.
 	s_instance->m_navMeshes.push_back(navMesh);
 
@@ -581,20 +530,20 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	const float* bmin, const float* bmax,
 	const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context)
 {
+	NavMeshBuildData buildData;
 	const float* verts = inputGeometry.vertices;
 	int nverts = inputGeometry.verticesCount;
 	const int* tris = inputGeometry.triangles;
 	int ntris = inputGeometry.trianglesCount;
 
-	rcChunkyTriMesh* chunkyMesh = new rcChunkyTriMesh;
-	if (!chunkyMesh)
+	buildData.chunkyMesh = new rcChunkyTriMesh;
+	if (!buildData.chunkyMesh)
 	{
 		context.log(RC_LOG_ERROR, "buildTiledNavigation: Out of memory 'm_chunkyMesh'.");
 		return nullptr;
 	}
-	if (!rcCreateChunkyTriMesh(verts, tris, ntris, 256, chunkyMesh))
+	if (!rcCreateChunkyTriMesh(verts, tris, ntris, 256, buildData.chunkyMesh))
 	{
-		delete chunkyMesh;
 		context.log(RC_LOG_ERROR, "buildTiledNavigation: Failed to build chunky mesh.");
 		return nullptr;
 	}		
@@ -654,15 +603,14 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// Step 2. Rasterize input polygon soup.
 	//
 	// Allocate voxel heightfield where we rasterize our input data to.
-	rcHeightfield* solid = rcAllocHeightfield();
-	if (!solid)
+	buildData.solid = rcAllocHeightfield();
+	if (!buildData.solid)
 	{
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'solid'.");
 		return nullptr;
 	}
-	if (!rcCreateHeightfield(&context, *solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
+	if (!rcCreateHeightfield(&context, *buildData.solid, rcConfig.width, rcConfig.height, rcConfig.bmin, rcConfig.bmax, rcConfig.cs, rcConfig.ch))
 	{
-		rcFreeHeightField(solid);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not create solid heightfield.");
 		return nullptr;
 	}
@@ -670,10 +618,9 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// Allocate array that can hold triangle area types.
 	// If you have multiple meshes you need to process, allocate
 	// and array which can hold the max number of triangles you need to process.
-	unsigned char* triareas = new unsigned char[chunkyMesh->maxTrisPerChunk];
-	if (!triareas)
+	buildData.triareas = new unsigned char[buildData.chunkyMesh->maxTrisPerChunk];
+	if (!buildData.triareas)
 	{
-		rcFreeHeightField(solid);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'm_triareas' (%d).", ntris);
 		return nullptr;
 	}
@@ -684,35 +631,30 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	tbmax[0] = rcConfig.bmax[0];
 	tbmax[1] = rcConfig.bmax[2];
 	int cid[512];// TODO: Make grow when returning too many items.
-	const int ncid = rcGetChunksOverlappingRect(chunkyMesh, tbmin, tbmax, cid, 512);
+	const int ncid = rcGetChunksOverlappingRect(buildData.chunkyMesh, tbmin, tbmax, cid, 512);
 	if (!ncid)
 	{
-		rcFreeHeightField(solid);
 		return nullptr;
 	}
 
 	int tileTriCount = 0;
 	for (int i = 0; i < ncid; ++i)
 	{
-		const rcChunkyTriMeshNode& node = chunkyMesh->nodes[cid[i]];
-		const int* ctris = &chunkyMesh->tris[node.i*3];
+		const rcChunkyTriMeshNode& node = buildData.chunkyMesh->nodes[cid[i]];
+		const int* ctris = &(buildData.chunkyMesh->tris[node.i*3]);
 		const int nctris = node.n;
 		
 		tileTriCount += nctris;
 		
-		memset(triareas, 0, nctris*sizeof(unsigned char));
+		memset(buildData.triareas, 0, nctris*sizeof(unsigned char));
 		rcMarkWalkableTriangles(&context, rcConfig.walkableSlopeAngle,
-								verts, nverts, ctris, nctris, triareas);
+								verts, nverts, ctris, nctris, buildData.triareas);
 		
-		if (!rcRasterizeTriangles(&context, verts, nverts, ctris, triareas, nctris, *solid, rcConfig.walkableClimb))
+		if (!rcRasterizeTriangles(&context, verts, nverts, ctris, buildData.triareas, nctris, *buildData.solid, rcConfig.walkableClimb))
 		{
-			rcFreeHeightField(solid);
 			return nullptr;
 		}
 	}
-		
-	delete [] triareas;
-	triareas = nullptr;
 
 	//
 	// Step 3. Filter walkable surfaces.
@@ -722,11 +664,11 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// remove unwanted overhangs caused by the conservative rasterization
 	// as well as filter spans where the character cannot possibly stand.
 	if (config.filterLowHangingObstacles)
-		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *solid);
+		rcFilterLowHangingWalkableObstacles(&context, rcConfig.walkableClimb, *buildData.solid);
 	if (config.filterLedgeSpans)
-		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *solid);
+		rcFilterLedgeSpans(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid);
 	if (config.filterWalkableLowHeightSpans)
-		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *solid);
+		rcFilterWalkableLowHeightSpans(&context, rcConfig.walkableHeight, *buildData.solid);
 
 	//
 	// Step 4. Partition walkable surface to simple regions.
@@ -735,29 +677,22 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	// Compact the heightfield so that it is faster to handle from now on.
 	// This will result more cache coherent data as well as the neighbours
 	// between walkable cells will be calculated.
-	rcCompactHeightfield* chf = rcAllocCompactHeightfield();
-	if (!chf)
+	buildData.chf = rcAllocCompactHeightfield();
+	if (!buildData.chf)
 	{
-		rcFreeHeightField(solid);
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'chf'.");
 		return nullptr;
 	}
-	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *solid, *chf))
+	if (!rcBuildCompactHeightfield(&context, rcConfig.walkableHeight, rcConfig.walkableClimb, *buildData.solid, *buildData.chf))
 	{
-		rcFreeHeightField(solid);
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not build compact data.");
 		return nullptr;
 	}
-
-	rcFreeHeightField(solid);
-	solid = nullptr;
-
+	
 	// Erode the walkable area by agent radius.
-	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *chf))
+	if (!rcErodeWalkableArea(&context, rcConfig.walkableRadius, *buildData.chf))
 	{
-		rcFreeCompactHeightfield(chf);
+		rcFreeCompactHeightfield(buildData.chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not erode.");
 		return nullptr;
 	}
@@ -797,17 +732,15 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	if (config.partitionType == PARTITION_WATERSHED)
 	{
 		// Prepare for region partitioning, by calculating distance field along the walkable surface.
-		if (!rcBuildDistanceField(&context, *chf))
+		if (!rcBuildDistanceField(&context, *buildData.chf))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build distance field.");
 			return nullptr;
 		}
 		
 		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildRegions(&context, *chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
+		if (!rcBuildRegions(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build watershed regions.");
 			return nullptr;
 		}
@@ -816,9 +749,8 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	{
 		// Partition the walkable surface into simple regions without holes.
 		// Monotone partitioning does not need distancefield.
-		if (!rcBuildRegionsMonotone(&context, *chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
+		if (!rcBuildRegionsMonotone(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea, rcConfig.mergeRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build monotone regions.");
 			return nullptr;
 		}
@@ -826,34 +758,29 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	else // SAMPLE_PARTITION_LAYERS
 	{
 		// Partition the walkable surface into simple regions without holes.
-		if (!rcBuildLayerRegions(&context, *chf, rcConfig.borderSize, rcConfig.minRegionArea))
+		if (!rcBuildLayerRegions(&context, *buildData.chf, rcConfig.borderSize, rcConfig.minRegionArea))
 		{
-			rcFreeCompactHeightfield(chf);
+			rcFreeCompactHeightfield(buildData.chf);
 			context.log(RC_LOG_ERROR, "buildNavigation: Could not build layer regions.");
 			return nullptr;
 		}
 	}
 
 	// Create contours.
-	rcContourSet* cset = rcAllocContourSet();
-	if (!cset)
+	buildData.cset = rcAllocContourSet();
+	if (!buildData.cset)
 	{
-		rcFreeCompactHeightfield(chf);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'cset'.");
 		return nullptr;
 	}
-	if (!rcBuildContours(&context, *chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *cset))
+	if (!rcBuildContours(&context, *buildData.chf, rcConfig.maxSimplificationError, rcConfig.maxEdgeLen, *buildData.cset))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not create contours.");
 		return nullptr;
 	}
 	
-	if (cset->nconts == 0)
+	if (buildData.cset->nconts == 0)
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
 		return nullptr;
 	}
 
@@ -862,19 +789,14 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	//
 
 	// Build polygon navmesh from the contours.
-	rcPolyMesh* pmesh = rcAllocPolyMesh();
-	if (!pmesh)
+	buildData.pmesh = rcAllocPolyMesh();
+	if (!buildData.pmesh)
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmesh'.");
 		return nullptr;
 	}
-	if (!rcBuildPolyMesh(&context, *cset, rcConfig.maxVertsPerPoly, *pmesh))
+	if (!rcBuildPolyMesh(&context, *buildData.cset, rcConfig.maxVertsPerPoly, *buildData.pmesh))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not triangulate contours.");
 		return nullptr;
 	}
@@ -882,49 +804,35 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 	//
 	// Step 7. Create detail mesh which allows to access approximate height on each polygon.
 	//
-	rcPolyMeshDetail* dmesh = rcAllocPolyMeshDetail();
-	if (!dmesh)
+	buildData.dmesh = rcAllocPolyMeshDetail();
+	if (!buildData.dmesh)
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmdtl'.");
 		return nullptr;
 	}
 
-	if (!rcBuildPolyMeshDetail(&context, *pmesh, *chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *dmesh))
+	if (!rcBuildPolyMeshDetail(&context, *buildData.pmesh, *buildData.chf, rcConfig.detailSampleDist, rcConfig.detailSampleMaxError, *buildData.dmesh))
 	{
-		rcFreeCompactHeightfield(chf);
-		rcFreeContourSet(cset);
-		rcFreePolyMesh(pmesh);
-		rcFreePolyMeshDetail(dmesh);
 		context.log(RC_LOG_ERROR, "buildNavigation: Could not build detail mesh.");
 		return nullptr;
 	}
 
-	rcFreeCompactHeightfield(chf);
-	chf = nullptr;
-	rcFreeContourSet(cset);
-	cset = nullptr;
-
-	unsigned char* navData = 0;
+	buildData.navData = 0;
 	int navDataSize = 0;
 	if (rcConfig.maxVertsPerPoly <= DT_VERTS_PER_POLYGON)
 	{
-		if (pmesh->nverts >= 0xffff)
+		if (buildData.pmesh->nverts >= 0xffff)
 		{
 			// The vertex indices are ushorts, and cannot point to more than 0xffff vertices.
-			context.log(RC_LOG_ERROR, "Too many vertices per tile %d (max: %d).", pmesh->nverts, 0xffff);
-			rcFreePolyMesh(pmesh);
-			rcFreePolyMeshDetail(dmesh);
+			context.log(RC_LOG_ERROR, "Too many vertices per tile %d (max: %d).", buildData.pmesh->nverts, 0xffff);
 			return nullptr;
 		}
 		
 		// Update poly flags from areas.
-		for (int i = 0; i < pmesh->npolys; ++i)
+		for (int i = 0; i < buildData.pmesh->npolys; ++i)
 		{
 			// We have to set a flag different from 0 for the tiles, otherwise it won't work (PassFilter will always return false)
-			pmesh->flags[i] = 1;
+			buildData.pmesh->flags[i] = 1;
 			// TODO: For now we don't set specific flags to areas
 			// if (m_pmesh->areas[i] == RC_WALKABLE_AREA)
 			// 	m_pmesh->areas[i] = SAMPLE_POLYAREA_GROUND;
@@ -947,18 +855,18 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 		
 		dtNavMeshCreateParams params;
 		memset(&params, 0, sizeof(params));
-		params.verts = pmesh->verts;
-		params.vertCount = pmesh->nverts;
-		params.polys = pmesh->polys;
-		params.polyAreas = pmesh->areas;
-		params.polyFlags = pmesh->flags;
-		params.polyCount = pmesh->npolys;
-		params.nvp = pmesh->nvp;
-		params.detailMeshes = dmesh->meshes;
-		params.detailVerts = dmesh->verts;
-		params.detailVertsCount = dmesh->nverts;
-		params.detailTris = dmesh->tris;
-		params.detailTriCount = dmesh->ntris;
+		params.verts = buildData.pmesh->verts;
+		params.vertCount = buildData.pmesh->nverts;
+		params.polys = buildData.pmesh->polys;
+		params.polyAreas = buildData.pmesh->areas;
+		params.polyFlags = buildData.pmesh->flags;
+		params.polyCount = buildData.pmesh->npolys;
+		params.nvp = buildData.pmesh->nvp;
+		params.detailMeshes = buildData.dmesh->meshes;
+		params.detailVerts = buildData.dmesh->verts;
+		params.detailVertsCount = buildData.dmesh->nverts;
+		params.detailTris = buildData.dmesh->tris;
+		params.detailTriCount = buildData.dmesh->ntris;
 		
 		// No offmesh connextions for now
 		params.offMeshConVerts = nullptr;
@@ -975,22 +883,23 @@ unsigned char* RecastUnityPluginManager::BuildTileMesh(const int tx, const int t
 		params.tileX = tx;
 		params.tileY = ty;
 		params.tileLayer = 0;
-		rcVcopy(params.bmin, pmesh->bmin);
-		rcVcopy(params.bmax, pmesh->bmax);
+		rcVcopy(params.bmin, buildData.pmesh->bmin);
+		rcVcopy(params.bmax, buildData.pmesh->bmax);
 		params.cs = rcConfig.cs;
 		params.ch = rcConfig.ch;
 		params.buildBvTree = true;
 		
-		if (!dtCreateNavMeshData(&params, &navData, &navDataSize))
+		if (!dtCreateNavMeshData(&params, &buildData.navData, &navDataSize))
 		{
-			rcFreePolyMesh(pmesh);
-			rcFreePolyMeshDetail(dmesh);
 			context.log(RC_LOG_ERROR, "Could not build Detour navmesh.");
 			return nullptr;
 		}		
 	}
+
+	buildData.disposeNavData = false;
 	
 	dataSize = navDataSize;
+	unsigned char* navData = buildData.navData;
 	return navData;
 }
 
