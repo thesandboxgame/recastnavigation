@@ -44,24 +44,37 @@ extern "C"
 	// Creates a TileNavMesh from some global mesh data.
 	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
-		const void* inputGeometry, void*& allocatedNavMesh, int* tilesCount)
+		const void* inputGeometry, void*& allocatedNavMesh, void*&computedChunkyTriMesh, int* tilesCount)
 	{
-		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh, tilesCount);
+		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles,
+			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
+			allocatedNavMesh, computedChunkyTriMesh, tilesCount);
 	}
 
 	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
 		const float* bmin, const float* bmax,
-		const void* inputGeometry, void*& allocatedNavMesh, bool dontRecomputeBounds = false)
+		const void* inputGeometry, void*& allocatedNavMesh, const void* chunkTriMesh, bool dontRecomputeBounds = false)
 	{
-		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), (dtNavMesh*)allocatedNavMesh, dontRecomputeBounds);
+		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
+			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
+			(dtNavMesh*)allocatedNavMesh, (const rcChunkyTriMesh*)chunkTriMesh, dontRecomputeBounds);
 	}
 	
 	// Dispose Navmesh
-	DllExport void DisposeNavMesh(void*& allocatedNavMesh)
+	DllExport void DisposeNavMesh(void* allocatedNavMesh)
 	{
 		if (allocatedNavMesh != nullptr)
 		{
 			RecastUnityPluginManager::disposeNavMesh(allocatedNavMesh);
+		}
+	}
+
+	DllExport void DisposeChunkyTriMesh(void* chunkyMesh)
+	{
+		if (chunkyMesh != nullptr)
+		{
+			rcChunkyTriMesh* chunkyTriMesh = (rcChunkyTriMesh*)chunkyMesh;
+			delete chunkyTriMesh;
 		}
 	}
 	

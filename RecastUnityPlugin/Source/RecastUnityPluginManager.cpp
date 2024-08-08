@@ -298,7 +298,7 @@ dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& confi
 // More or less copied from Sample_TileMesh.cpp
 dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int* tilesNumber)
+	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber)
 {
 	if (!isInitialized())
 	{
@@ -346,15 +346,38 @@ dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& 
 		return DT_FAILURE;
 	}
 
+	rcChunkyTriMesh* chunkyMesh = new rcChunkyTriMesh;
+	if (!chunkyMesh)
+	{
+		context.log(RC_LOG_ERROR, "buildTiledNavigation: Out of memory 'm_chunkyMesh'.");
+		return DT_FAILURE;
+	}
+
+	const float* verts = inputGeometry.vertices;
+	const int* tris = inputGeometry.triangles;
+	int ntris = inputGeometry.trianglesCount;
+	
+	if (!rcCreateChunkyTriMesh(verts, tris, ntris, 256, chunkyMesh))
+	{
+		context.log(RC_LOG_ERROR, "buildTiledNavigation: Failed to build chunky mesh.");
+		delete chunkyMesh;
+		return DT_FAILURE;
+	}
+
 	if (buildAllTiles)
 	{
-		dtStatus tilesCreationStatus = BuildAllTiles(navMesh, config, tileSize, bmin, bmax, inputGeometry, context);
+		dtStatus tilesCreationStatus = BuildAllTiles(navMesh, config, tileSize, bmin, bmax, inputGeometry, chunkyMesh, context);
 		if (dtStatusFailed(tilesCreationStatus))
 		{
 			context.log(RC_LOG_ERROR, "buildTiledNavigation: Could not init navmesh.");
 			dtFree(navMesh);
+			delete chunkyMesh;
 			return DT_FAILURE;
 		}
+	}
+	else
+	{
+		computedChunkyTriMesh = chunkyMesh;
 	}
 
 	// Store the allocated navmesh.
@@ -365,8 +388,8 @@ dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& 
 	return DT_SUCCESS;
 }
 
-void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds)
+void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const rcChunkyTriMesh* chunkyMesh, bool dontRecomputeBounds)
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
@@ -401,9 +424,11 @@ void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildCo
 		lastBuiltTileBmax[2] = bmax[2];
 	}
 
+	rcContext context;	
 	int dataSize = 0;
-	rcContext context;
-	unsigned char* data = buildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
+
+	unsigned char* data = buildTileMesh(x, y, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax,
+		inputGeometry, chunkyMesh, dataSize, context);
 	if (data)
 	{
 		// TODO: we should not need to remove the previous data, because there should not be one.
@@ -422,7 +447,7 @@ void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildCo
 // copied from Sample_TileMesh::buildAllTiles()
 dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, rcContext& context)
+	const NavMeshInputGeometry& inputGeometry, const rcChunkyTriMesh* chunkyMesh, rcContext& context)
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
@@ -448,7 +473,7 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 			lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
 			
 			int dataSize = 0;
-			unsigned char* data = buildTileMesh(x, y, navMesh, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, dataSize, context);
+			unsigned char* data = buildTileMesh(x, y, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax, inputGeometry, chunkyMesh, dataSize, context);
 			if (data)
 			{
 				// Remove any previous data (navmesh owns and deletes the data).
@@ -465,27 +490,13 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 	return DT_SUCCESS;
 }
 
-unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int ty, dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
+unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context)
+	const NavMeshInputGeometry& inputGeometry, const rcChunkyTriMesh* chunkyMesh, int& dataSize, rcContext& context)
 {
 	NavMeshBuildData buildData;
 	const float* verts = inputGeometry.vertices;
 	int nverts = inputGeometry.verticesCount;
-	const int* tris = inputGeometry.triangles;
-	int ntris = inputGeometry.trianglesCount;
-
-	buildData.chunkyMesh = new rcChunkyTriMesh;
-	if (!buildData.chunkyMesh)
-	{
-		context.log(RC_LOG_ERROR, "buildTiledNavigation: Out of memory 'm_chunkyMesh'.");
-		return nullptr;
-	}
-	if (!rcCreateChunkyTriMesh(verts, tris, ntris, 256, buildData.chunkyMesh))
-	{
-		context.log(RC_LOG_ERROR, "buildTiledNavigation: Failed to build chunky mesh.");
-		return nullptr;
-	}		
 	
 	//
 	// Step 1. Initialize build config.
@@ -544,7 +555,7 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	tbmax[0] = rcConfig.bmax[0];
 	tbmax[1] = rcConfig.bmax[2];
 	int cid[512];// TODO: Make grow when returning too many items.
-	const int ncid = rcGetChunksOverlappingRect(buildData.chunkyMesh, tbmin, tbmax, cid, 512);
+	const int ncid = rcGetChunksOverlappingRect(chunkyMesh, tbmin, tbmax, cid, 512);
 	if (!ncid)
 	{
 		return nullptr;
@@ -554,7 +565,7 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	// Step 2. Rasterize input polygon soup.
 	//
 
-	dtStatus status = NavMeshBuildUtility::prepareTriangleRasterization(rcConfig, buildData.chunkyMesh->maxTrisPerChunk, buildData, context);
+	dtStatus status = NavMeshBuildUtility::prepareTriangleRasterization(rcConfig, chunkyMesh->maxTrisPerChunk, buildData, context);
 	if (status == DT_FAILURE)
 	{
 		return nullptr;
@@ -563,8 +574,8 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	int tileTriCount = 0;
 	for (int i = 0; i < ncid; ++i)
 	{
-		const rcChunkyTriMeshNode& node = buildData.chunkyMesh->nodes[cid[i]];
-		const int* ctris = &(buildData.chunkyMesh->tris[node.i*3]);
+		const rcChunkyTriMeshNode& node = chunkyMesh->nodes[cid[i]];
+		const int* ctris = &(chunkyMesh->tris[node.i*3]);
 		const int nctris = node.n;
 		
 		tileTriCount += nctris;
@@ -725,7 +736,7 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	return navData;
 }
 
-void RecastUnityPluginManager::disposeNavMesh(void*& allocatedNavMesh)
+void RecastUnityPluginManager::disposeNavMesh(void* allocatedNavMesh)
 {
 	if (allocatedNavMesh == nullptr)
 	{
@@ -740,7 +751,6 @@ void RecastUnityPluginManager::disposeNavMesh(void*& allocatedNavMesh)
 	}
 
 	dtFreeNavMesh(navMesh);
-	allocatedNavMesh = nullptr;
 }
 
 

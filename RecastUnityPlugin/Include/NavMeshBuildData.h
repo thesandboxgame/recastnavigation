@@ -14,8 +14,7 @@ struct NavMeshBuildData
 		  cset(nullptr),
 		  pmesh(nullptr),
 		  dmesh(nullptr),
-		  navData(nullptr),
-		  chunkyMesh(nullptr)
+		  navData(nullptr)
 	{
 	}
 
@@ -71,7 +70,6 @@ struct NavMeshBuildData
 	rcPolyMesh* pmesh;
 	rcPolyMeshDetail* dmesh;
 	unsigned char* navData;
-	rcChunkyTriMesh* chunkyMesh;
 	bool ownsNavData;
 
 private:
