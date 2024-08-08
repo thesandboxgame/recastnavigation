@@ -41,6 +41,7 @@ extern "C"
 		return RecastUnityPluginManager::createNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
 	}
 
+	// Creates a TileNavMesh from some global mesh data.
 	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
 		const void* inputGeometry, void*& allocatedNavMesh, int* tilesCount)
@@ -50,9 +51,9 @@ extern "C"
 
 	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
 		const float* bmin, const float* bmax,
-		const void* inputGeometry, void*& allocatedNavMesh)
+		const void* inputGeometry, void*& allocatedNavMesh, bool dontRecomputeBounds = false)
 	{
-		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), (dtNavMesh*)allocatedNavMesh);
+		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize, bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), (dtNavMesh*)allocatedNavMesh, dontRecomputeBounds);
 	}
 	
 	// Dispose Navmesh

@@ -311,7 +311,7 @@ dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& 
 	if (!navMesh)
 	{
 		context.log(RC_LOG_ERROR, "buildTiledNavigation: Could not allocate navmesh.");
-		return false;
+		return DT_FAILURE;
 	}
 	
 	dtNavMeshParams params;
@@ -366,7 +366,7 @@ dtStatus RecastUnityPluginManager:: createTileNavMesh(const NavMeshBuildConfig& 
 }
 
 void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh)
+				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds)
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
@@ -379,14 +379,27 @@ void RecastUnityPluginManager::addTile(int* tileCoordinate, const NavMeshBuildCo
 	int x = tileCoordinate[0];
 	int y = tileCoordinate[1];
 
-	// TODO: remove the code duplication
-	lastBuiltTileBmin[0] = bmin[0] + x*tcs;
-	lastBuiltTileBmin[1] = bmin[1];
-	lastBuiltTileBmin[2] = bmin[2] + y*tcs;
+	if (!dontRecomputeBounds)
+	{
+		// TODO: remove the code duplication
+		lastBuiltTileBmin[0] = bmin[0] + x*tcs;
+		lastBuiltTileBmin[1] = bmin[1];
+		lastBuiltTileBmin[2] = bmin[2] + y*tcs;
 			
-	lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
-	lastBuiltTileBmax[1] = bmax[1];
-	lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
+		lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
+		lastBuiltTileBmax[1] = bmax[1];
+		lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
+	}
+	else
+	{
+		lastBuiltTileBmin[0] = bmin[0];
+		lastBuiltTileBmin[1] = bmin[1];
+		lastBuiltTileBmin[2] = bmin[2];
+			
+		lastBuiltTileBmax[0] = bmax[0];
+		lastBuiltTileBmax[1] = bmax[1];
+		lastBuiltTileBmax[2] = bmax[2];
+	}
 
 	int dataSize = 0;
 	rcContext context;

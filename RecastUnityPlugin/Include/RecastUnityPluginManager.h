@@ -45,7 +45,7 @@ public:
 		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int* tilesNumber);
 
 	static void addTile(int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh);
+				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds = false);
 	
 	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
 
