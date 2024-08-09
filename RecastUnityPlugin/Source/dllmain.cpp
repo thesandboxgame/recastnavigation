@@ -41,21 +41,38 @@ extern "C"
 		return RecastUnityPluginManager::createNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
 	}
 
+	// Creates an empty TileNavMesh
+	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize,
+	const float* bmin, const float* bmax, void*& allocatedNavMesh, int* tilesCount)
+	{
+		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize,
+			bmin, bmax, allocatedNavMesh, tilesCount);
+	}
+
+	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
+	const float* bmin, const float* bmax,
+	const void* inputGeometry, void*& allocatedNavMesh, bool dontRecomputeBounds = false)
+	{
+		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
+			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
+			(dtNavMesh*)allocatedNavMesh, dontRecomputeBounds);
+	}
+	
 	// Creates a TileNavMesh from some global mesh data.
-	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize, bool buildAllTiles,
+	DllExport dtStatus CreateTileNavMeshWithChunkyMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
 		const void* inputGeometry, void*& allocatedNavMesh, void*&computedChunkyTriMesh, int* tilesCount)
 	{
-		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles,
+		return RecastUnityPluginManager::createTileNavMeshWithChunkyMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles,
 			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
 			allocatedNavMesh, computedChunkyTriMesh, tilesCount);
 	}
 
-	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
+	DllExport void AddTileWithChunkyMesh(int* tilesCoordinates, const void* config, float tileSize,
 		const float* bmin, const float* bmax,
 		const void* inputGeometry, void*& allocatedNavMesh, const void* chunkTriMesh, bool dontRecomputeBounds = false)
 	{
-		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
+		return RecastUnityPluginManager::addTileWithChunkyMesh(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
 			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
 			(dtNavMesh*)allocatedNavMesh, (const rcChunkyTriMesh*)chunkTriMesh, dontRecomputeBounds);
 	}

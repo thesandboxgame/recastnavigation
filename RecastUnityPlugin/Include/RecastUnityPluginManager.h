@@ -40,11 +40,18 @@ public:
 
 	static void disposeNavMesh(void* allocatedNavMesh);
 
-	static dtStatus createTileNavMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
+	static dtStatus createTileNavMesh(const NavMeshBuildConfig& config, float tileSize,
+		const float* bmin, const float* bmax,
+		void*& allocatedNavMesh, int* tilesNumber);
+	
+	static void addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds = false);
+	
+	static dtStatus createTileNavMeshWithChunkyMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber);
 
-	static void addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+	static void addTileWithChunkyMesh(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
 				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const rcChunkyTriMesh* chunkyMesh, bool dontRecomputeBounds = false);
 	
 	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
@@ -63,6 +70,10 @@ private:
 	                              const NavMeshInputGeometry& inputGeometry, const rcChunkyTriMesh* chunkyMesh, rcContext& context);
 
 	static unsigned char* buildTileMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
+		const float* bmin, const float* bmax,
+		const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context);
+	
+	static unsigned char* buildTileMeshWithChunkyMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,
 		const NavMeshInputGeometry& inputGeometry, const rcChunkyTriMesh* chunkyMesh, int& dataSize, rcContext& context);
 	
