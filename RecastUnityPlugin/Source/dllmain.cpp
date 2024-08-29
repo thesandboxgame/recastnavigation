@@ -102,7 +102,7 @@ extern "C"
 	}
 	
 	// Dispose Navmesh query
-	DllExport void DisposeNavMeshQuery(void*& allocatedNavMeshQuery)
+	DllExport void DisposeNavMeshQuery(void* allocatedNavMeshQuery)
 	{
 		if (allocatedNavMeshQuery != nullptr)
 		{
