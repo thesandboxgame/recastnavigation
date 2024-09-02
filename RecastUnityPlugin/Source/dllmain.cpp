@@ -258,7 +258,7 @@ extern "C"
 					if (inner)
 					{
 						if (p->neis[j] == 0) continue;
-						if (p->neis[j] & DT_EXT_LINK == 0)
+						if ((p->neis[j] & DT_EXT_LINK) == 0)
 						{
 							// This is not a border
 							continue;
