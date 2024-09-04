@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "BlockArea.h"
 #include "DetourNavMesh.h"
 #include "NavMeshBuildConfig.h"
 #include "NavMeshBuildData.h"
@@ -19,6 +20,28 @@ enum PartitionType
 	PARTITION_WATERSHED,
 	PARTITION_MONOTONE,
 	PARTITION_LAYERS
+};
+
+// This is used to mark polygons when building it.
+enum PolyAreas
+{
+	POLYAREA_DEFAULT = 0x01,
+	POLYAREA_LIQUID = 0x02,
+	// SAMPLE_POLYAREA_ROAD,
+	// SAMPLE_POLYAREA_DOOR,
+	// SAMPLE_POLYAREA_GRASS,
+	// SAMPLE_POLYAREA_JUMP
+};
+
+// This is used by the Nav Mesh queries to know if the agent has to ability to cross some polygons.
+enum PolyFlags
+{
+	POLYFLAGS_WALK			= 0x01,		// Default area type. Can walk on it (ground, grass, etc.)
+	POLYFLAGS_SWIM		= 0x02,		// Area type for liquids. Requires to swim (water, lava, etc.).
+	// SAMPLE_POLYFLAGS_DOOR		= 0x04,		// Ability to move through doors.
+	// SAMPLE_POLYFLAGS_JUMP		= 0x08,		// Ability to jump.
+	// SAMPLE_POLYFLAGS_DISABLED	= 0x10,		// Disabled polygon
+	SAMPLE_POLYFLAGS_ALL	= 0xffff	// All abilities.
 };
 
 /// A singleton that contains all the allocated data for the C# side.
@@ -45,7 +68,7 @@ public:
 		void*& allocatedNavMesh, int* tilesNumber);
 	
 	static void addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds = false);
+			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount);
 	
 	static dtStatus createTileNavMeshWithChunkyMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
@@ -71,7 +94,7 @@ private:
 
 	static unsigned char* buildTileMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,
-		const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context);
+		const NavMeshInputGeometry& inputGeometry, int& dataSize, const BlockArea* blockAreas, int blocksCount, rcContext& context);
 	
 	static unsigned char* buildTileMeshWithChunkyMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,

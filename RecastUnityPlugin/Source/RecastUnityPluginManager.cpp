@@ -448,11 +448,10 @@ dtStatus RecastUnityPluginManager:: createTileNavMeshWithChunkyMesh(const NavMes
 }
 
 void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-		   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, bool dontRecomputeBounds)
+		   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount)
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
-	const int ts = (int)tileSize;
 	const float tcs = tileSize * config.cs;
 
 	float lastBuiltTileBmin[3];
@@ -461,33 +460,20 @@ void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshB
 	int x = tileCoordinate[0];
 	int y = tileCoordinate[1];
 
-	if (!dontRecomputeBounds)
-	{
-		// TODO: remove the code duplication
-		lastBuiltTileBmin[0] = bmin[0] + x*tcs;
-		lastBuiltTileBmin[1] = bmin[1];
-		lastBuiltTileBmin[2] = bmin[2] + y*tcs;
-			
-		lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
-		lastBuiltTileBmax[1] = bmax[1];
-		lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
-	}
-	else
-	{
-		lastBuiltTileBmin[0] = bmin[0];
-		lastBuiltTileBmin[1] = bmin[1];
-		lastBuiltTileBmin[2] = bmin[2];
-			
-		lastBuiltTileBmax[0] = bmax[0];
-		lastBuiltTileBmax[1] = bmax[1];
-		lastBuiltTileBmax[2] = bmax[2];
-	}
+	// TODO: expose some method to get these bounds in the C# side.
+	lastBuiltTileBmin[0] = bmin[0] + x*tcs;
+	lastBuiltTileBmin[1] = bmin[1];
+	lastBuiltTileBmin[2] = bmin[2] + y*tcs;
+		
+	lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
+	lastBuiltTileBmax[1] = bmax[1];
+	lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
 
 	rcContext context;	
 	int dataSize = 0;
 
 	unsigned char* data = buildTileMesh(x, y, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax,
-		inputGeometry, dataSize, context);
+		inputGeometry, dataSize, blockAreas, blocksCount, context);
 	if (data)
 	{
 		// TODO: we should not need to remove the previous data, because there should not be one.
@@ -607,7 +593,7 @@ dtStatus RecastUnityPluginManager::BuildAllTiles(dtNavMesh* navMesh, const NavMe
 
 unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int ty, const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, int& dataSize, rcContext& context)
+	const NavMeshInputGeometry& inputGeometry, int& dataSize, const BlockArea* blockAreas, int blocksCount, rcContext& context)
 {
 	NavMeshBuildData buildData;
 	const float* verts = inputGeometry.vertices;
@@ -701,12 +687,43 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	{
 		return nullptr;
 	}
-
-	// TODO: for now there is nothing to mark areas, maybe later.
+	
 	// (Optional) Mark areas.
-	// const ConvexVolume* vols = m_geom->getConvexVolumes();
-	// for (int i  = 0; i < m_geom->getConvexVolumeCount(); ++i)
-	// 	rcMarkConvexPolyArea(m_ctx, vols[i].verts, vols[i].nverts, vols[i].hmin, vols[i].hmax, (unsigned char)vols[i].area, *m_chf);
+	for (int i  = 0; i < blocksCount; ++i)
+	{
+		const int blockVerticesCount = 4;
+		const float halfSize = 0.5f;
+		float vertices[blockVerticesCount * 3];
+		const float* center = blockAreas[i].center;
+		float minY = center[1] - halfSize;
+		// We add an offset to make sure the volume is really taken into account.
+		float maxY = center[1] + halfSize * 2;
+
+		// Create the vertices for the bottom plane of the block.
+		float* currentVertex = vertices;
+		currentVertex[0] = center[0] - halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] - halfSize;
+
+		currentVertex += 3;
+		currentVertex[0] = center[0] + halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] - halfSize;
+
+		currentVertex += 3;
+		currentVertex[0] = center[0] - halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] + halfSize;
+		
+		currentVertex += 3;
+		currentVertex[0] = center[0] + halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] + halfSize;
+
+		const float* verts = vertices;
+		rcMarkConvexPolyArea(&context, verts, blockVerticesCount, minY, maxY, (unsigned char)blockAreas[i].area, *buildData.chf);
+	}
+		
 
 	if (NavMeshBuildUtility::buildRegions(config.partitionType, rcConfig.borderSize, rcConfig, buildData, context) == DT_FAILURE)
 	{
@@ -759,26 +776,18 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 		// Update poly flags from areas.
 		for (int i = 0; i < buildData.pmesh->npolys; ++i)
 		{
-			// We have to set a flag different from 0 for the tiles, otherwise it won't work (PassFilter will always return false)
-			buildData.pmesh->flags[i] = 1;
-			// TODO: For now we don't set specific flags to areas
-			// if (m_pmesh->areas[i] == RC_WALKABLE_AREA)
-			// 	m_pmesh->areas[i] = SAMPLE_POLYAREA_GROUND;
-			//
-			// if (m_pmesh->areas[i] == SAMPLE_POLYAREA_GROUND ||
-			// 	m_pmesh->areas[i] == SAMPLE_POLYAREA_GRASS ||
-			// 	m_pmesh->areas[i] == SAMPLE_POLYAREA_ROAD)
-			// {
-			// 	m_pmesh->flags[i] = SAMPLE_POLYFLAGS_WALK;
-			// }
-			// else if (m_pmesh->areas[i] == SAMPLE_POLYAREA_WATER)
-			// {
-			// 	m_pmesh->flags[i] = SAMPLE_POLYFLAGS_SWIM;
-			// }
-			// else if (m_pmesh->areas[i] == SAMPLE_POLYAREA_DOOR)
-			// {
-			// 	m_pmesh->flags[i] = SAMPLE_POLYFLAGS_WALK | SAMPLE_POLYFLAGS_DOOR;
-			// }
+			// RC_WALKABLE_AREA is the default.
+			if (buildData.pmesh->areas[i] == RC_WALKABLE_AREA)
+				buildData.pmesh->areas[i] = POLYAREA_DEFAULT;
+			
+			if (buildData.pmesh->areas[i] == POLYAREA_DEFAULT)
+			{
+				buildData.pmesh->flags[i] = POLYFLAGS_WALK;
+			}
+			else if (buildData.pmesh->areas[i] == POLYAREA_LIQUID)
+			{
+				buildData.pmesh->flags[i] = POLYFLAGS_SWIM;
+			}
 		}
 		
 		dtNavMeshCreateParams params;

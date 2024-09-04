@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdint.h>
 
+#include "BlockArea.h"
 #include "DetourNavMeshQuery.h"
 #include "DetourCommon.h"
 #include "RecastUnityPluginManager.h"
@@ -51,11 +52,11 @@ extern "C"
 
 	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
 	const float* bmin, const float* bmax,
-	const void* inputGeometry, void*& allocatedNavMesh, bool dontRecomputeBounds = false)
+	const void* inputGeometry, void*& allocatedNavMesh, const BlockArea* blockAreas, int blocksCount)
 	{
 		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
 			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
-			(dtNavMesh*)allocatedNavMesh, dontRecomputeBounds);
+			(dtNavMesh*)allocatedNavMesh, blockAreas, blocksCount);
 	}
 	
 	// Creates a TileNavMesh from some global mesh data.
@@ -115,41 +116,53 @@ extern "C"
 	// - [in] navmesh query (references the navmesh)
 	// - [in] start + end positions (used to find the nearest poly)
 	// - [in] polygon search extents for start + end
-	// - [in] query filter ? Probably later
+	// - [in] query filter
 	// - [out] positions found on the nearest polygons for start + end?
 	// - [out] path (float* array) containing the positions (3 floats per path node) of the path
 	// - [out] path positions count
 	// - [returns] dtStatus (unsigned int)
-	DllExport dtStatus FindStraightPath(void* navMeshQuery, const float* startPosition, const float* endPosition, const float* polygonSearchExtents, float* pathPositions,
+	DllExport dtStatus FindStraightPath(void* navMeshQuery, const float* startPosition, const float* endPosition, const float* polygonSearchExtents,
+		const dtQueryFilter* filter, float* pathPositions,
 		int* pathPositionsCount, int pathMaxSize = PATH_MAX_CAPACITY)
 	{
 		// Copied from NavMeshTesterTool.cpp
 		auto query = (dtNavMeshQuery*)navMeshQuery;
 		// TEMP: For now we don't use any specific filter.
-		dtQueryFilter filter;
 		dtPolyRef startPolyRef, endPolyRef;
-		query->findNearestPoly(startPosition, polygonSearchExtents, &filter, &startPolyRef, 0);
-		query->findNearestPoly(endPosition, polygonSearchExtents, &filter, &endPolyRef, 0);
+		query->findNearestPoly(startPosition, polygonSearchExtents, filter, &startPolyRef, 0);
+		query->findNearestPoly(endPosition, polygonSearchExtents, filter, &endPolyRef, 0);
 		
 		pathMaxSize =  PATH_MAX_CAPACITY < pathMaxSize ? PATH_MAX_CAPACITY : pathMaxSize;
 		dtPolyRef pathPolys[PATH_MAX_CAPACITY];
-		int pathCount;
-		query->findPath(startPolyRef, endPolyRef, startPosition, endPosition, &filter, pathPolys, &pathCount, pathMaxSize);
-		if (pathCount > 0)
+		int foundPathSize;
+		dtStatus pathResult = query->findPath(startPolyRef, endPolyRef, startPosition, endPosition, filter, pathPolys, &foundPathSize, pathMaxSize);
+		if (foundPathSize > 0)
 		{
 			// In case of partial path, make sure the end point is clamped to the last polygon.
 			float epos[3];
 			dtVcopy(epos, endPosition);
-			if (pathPolys[pathCount-1] != endPolyRef)
-				query->closestPointOnPoly(pathPolys[pathCount-1], endPosition, epos, 0);
+			if (pathPolys[foundPathSize-1] != endPolyRef)
+				query->closestPointOnPoly(pathPolys[foundPathSize-1], endPosition, epos, 0);
 			
 			dtPolyRef straightPathPolys[PATH_MAX_CAPACITY];
 			unsigned char straightPathFlags[PATH_MAX_CAPACITY];
 			
 			// TEMP: no straight path options for now.
-			dtStatus pathQueryResult = query->findStraightPath(startPosition, epos, pathPolys, pathCount,
+			dtStatus pathQueryResult = query->findStraightPath(startPosition, epos, pathPolys, foundPathSize,
 										 pathPositions, straightPathFlags,
 										 straightPathPolys, pathPositionsCount, pathMaxSize, 0);
+
+			// Pass some status info from the first path search to the final status.
+			if ((pathResult & DT_PARTIAL_RESULT) != 0)
+			{
+				pathQueryResult |= DT_PARTIAL_RESULT;
+			}
+
+			if ((pathResult & DT_OUT_OF_NODES) != 0)
+			{
+				pathQueryResult |= DT_OUT_OF_NODES;
+			}
+			
 			return pathQueryResult;
 		}
 
