@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "BlockArea.h"
+#include "BuildContext.h"
 #include "DetourNavMesh.h"
 #include "NavMeshBuildConfig.h"
 #include "NavMeshBuildData.h"
@@ -68,7 +69,7 @@ public:
 		void*& allocatedNavMesh, int* tilesNumber);
 	
 	static void addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount);
+			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount, BuildContext* context);
 	
 	static dtStatus createTileNavMeshWithChunkyMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,

@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "BlockArea.h"
+#include "BuildContext.h"
 #include "DetourNavMeshQuery.h"
 #include "DetourCommon.h"
 #include "NavMeshDebugDrawUtility.h"
@@ -53,11 +54,13 @@ extern "C"
 
 	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
 	const float* bmin, const float* bmax,
-	const void* inputGeometry, void*& allocatedNavMesh, const BlockArea* blockAreas, int blocksCount)
-	{
+	const void* inputGeometry, void*& allocatedNavMesh, const BlockArea* blockAreas, int blocksCount, void* contextData)
+	{ 
+		TimeVal* timings = (TimeVal*)contextData;
+		BuildContext buildContext(timings);
 		return RecastUnityPluginManager::addTile(tilesCoordinates, *((const NavMeshBuildConfig*)config), tileSize,
 			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
-			(dtNavMesh*)allocatedNavMesh, blockAreas, blocksCount);
+			(dtNavMesh*)allocatedNavMesh, blockAreas, blocksCount, &buildContext);
 	}
 	
 	// Creates a TileNavMesh from some global mesh data.

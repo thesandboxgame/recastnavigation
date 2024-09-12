@@ -448,7 +448,7 @@ dtStatus RecastUnityPluginManager:: createTileNavMeshWithChunkyMesh(const NavMes
 }
 
 void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
-		   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount)
+		   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount, BuildContext* context)
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
@@ -468,12 +468,11 @@ void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshB
 	lastBuiltTileBmax[0] = bmin[0] + (x+1)*tcs;
 	lastBuiltTileBmax[1] = bmax[1];
 	lastBuiltTileBmax[2] = bmin[2] + (y+1)*tcs;
-
-	rcContext context;	
+	
 	int dataSize = 0;
 
 	unsigned char* data = buildTileMesh(x, y, config, tileSize, lastBuiltTileBmin, lastBuiltTileBmax,
-		inputGeometry, dataSize, blockAreas, blocksCount, context);
+		inputGeometry, dataSize, blockAreas, blocksCount, *context);
 	if (data)
 	{
 		// TODO: we should not need to remove the previous data, because there should not be one.
@@ -487,6 +486,8 @@ void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshB
 			dtFree(data);
 		navMesh->mutex.unlock();
 	}
+
+	context->computeAllTimings();
 }
 
 void RecastUnityPluginManager::addTileWithChunkyMesh(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
