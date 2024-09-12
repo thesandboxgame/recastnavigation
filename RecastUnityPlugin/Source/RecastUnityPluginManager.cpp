@@ -691,7 +691,9 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 	// (Optional) Mark areas.
 	for (int i  = 0; i < blocksCount; ++i)
 	{
-		const int blockVerticesCount = 4;
+		// In theory, 4 points would have been enough, but we subdivise the square because the poly marking checks
+		// the vertices, not the bounds. Subdividing increase the accuracy of the marking.
+		const int blockVerticesCount = 8;
 		const float halfSize = 0.5f;
 		float vertices[blockVerticesCount * 3];
 		const float* center = blockAreas[i].center;
@@ -706,9 +708,29 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 		currentVertex[2] = center[2] - halfSize;
 
 		currentVertex += 3;
+		currentVertex[0] = center[0];
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] - halfSize;
+		
+		currentVertex += 3;
 		currentVertex[0] = center[0] + halfSize;
 		currentVertex[1] = center[1] - halfSize;
 		currentVertex[2] = center[2] - halfSize;
+
+		currentVertex += 3;
+		currentVertex[0] = center[0] + halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2];
+		
+		currentVertex += 3;
+		currentVertex[0] = center[0] + halfSize;
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] + halfSize;
+
+		currentVertex += 3;
+		currentVertex[0] = center[0];
+		currentVertex[1] = center[1] - halfSize;
+		currentVertex[2] = center[2] + halfSize;
 
 		currentVertex += 3;
 		currentVertex[0] = center[0] - halfSize;
@@ -716,15 +738,15 @@ unsigned char* RecastUnityPluginManager::buildTileMesh(const int tx, const int t
 		currentVertex[2] = center[2] + halfSize;
 		
 		currentVertex += 3;
-		currentVertex[0] = center[0] + halfSize;
+		currentVertex[0] = center[0] - halfSize;
 		currentVertex[1] = center[1] - halfSize;
-		currentVertex[2] = center[2] + halfSize;
+		currentVertex[2] = center[2];
 
 		const float* verts = vertices;
+		// TODO: maybe do a better methods that checks the bounds or something? Checking the vertices is not very effecient to have an accurate marking.
 		rcMarkConvexPolyArea(&context, verts, blockVerticesCount, minY, maxY, (unsigned char)blockAreas[i].area, *buildData.chf);
 	}
-		
-
+	
 	if (NavMeshBuildUtility::buildRegions(config.partitionType, rcConfig.borderSize, rcConfig, buildData, context) == DT_FAILURE)
 	{
 		return nullptr;
