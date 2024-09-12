@@ -4,6 +4,7 @@
 #include "BlockArea.h"
 #include "DetourNavMeshQuery.h"
 #include "DetourCommon.h"
+#include "NavMeshDebugDrawUtility.h"
 #include "RecastUnityPluginManager.h"
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
@@ -168,164 +169,33 @@ extern "C"
 
 		return DT_FAILURE;
 	}
-
 	
 	// Debug
-	DllExport int GetNavMeshTrianglesCount(const void* navMeshHandle)
+	DllExport int GetPolyTrianglesCount(const void* navMeshHandle)
 	{
 		const dtNavMesh* navMesh = (const dtNavMesh*)navMeshHandle;
-		int trianglesCount = 0;
+		int polyTrianglesCount = 0;
 		for (int i = 0; i < navMesh->getMaxTiles(); ++i)
 		{
 			const dtMeshTile* tile = navMesh->getTile(i);
 			if (!tile->header) continue;
-			for (int i = 0; i < tile->header->polyCount; ++i)
+			for (int k = 0; k < tile->header->polyCount; ++k)
 			{
-				const dtPoly* p = &tile->polys[i];
+				const dtPoly* p = &tile->polys[k];
 				if (p->getType() == DT_POLYTYPE_OFFMESH_CONNECTION)	// Skip off-mesh links.
 					continue;
 			
-				const dtPolyDetail* pd = &tile->detailMeshes[i];
-				trianglesCount += pd->triCount;
+				const dtPolyDetail* pd = &tile->detailMeshes[k];
+				polyTrianglesCount += pd->triCount;
 			}
 		}
-
-		return trianglesCount;
+		return polyTrianglesCount;
 	}
-	
-	DllExport void GetNavMeshTriangles(float* trianglePositions, const void* navMeshHandle)
+
+	DllExport bool FetchNavMeshDebugDrawData(const void* navMeshHandle, void* data)
 	{
 		const dtNavMesh* navMesh = (const dtNavMesh*)navMeshHandle;
-		int triangleVertexPositionIndex = 0;
-		for (int i = 0; i < navMesh->getMaxTiles(); ++i)
-		{
-			const dtMeshTile* tile = navMesh->getTile(i);
-			if (!tile->header) continue;
-			
-			for (int i = 0; i < tile->header->polyCount; ++i)
-			{
-				const dtPoly* p = &tile->polys[i];
-				if (p->getType() == DT_POLYTYPE_OFFMESH_CONNECTION)	// Skip off-mesh links.
-					continue;
-		
-				const dtPolyDetail* pd = &tile->detailMeshes[i];
-				
-				for (int j = 0; j < pd->triCount; ++j)
-				{
-					const unsigned char* t = &tile->detailTris[(pd->triBase+j)*4];
-					for (int k = 0; k < 3; ++k)
-					{
-						float* pos;
-						if (t[k] < p->vertCount)
-							pos = &tile->verts[p->verts[t[k]]*3];
-						else
-							pos = &tile->detailVerts[(pd->vertBase+t[k]-p->vertCount)*3];
-						
-						trianglePositions[triangleVertexPositionIndex] = pos[0];
-						trianglePositions[triangleVertexPositionIndex + 1] = pos[1];
-						trianglePositions[triangleVertexPositionIndex + 2] = pos[2];
-						triangleVertexPositionIndex += 3;
-					}
-				}
-			}
-		}
+		NavMeshDebugDrawData* debugDrawData = (NavMeshDebugDrawData*)data;
+		return NavMeshDebugDrawUtility::fetchTileNavMeshDebugDrawData(*navMesh, debugDrawData);
 	}
-	
-	static float distancePtLine2d(const float* pt, const float* p, const float* q)
-	{
-		float pqx = q[0] - p[0];
-		float pqz = q[2] - p[2];
-		float dx = pt[0] - p[0];
-		float dz = pt[2] - p[2];
-		float d = pqx*pqx + pqz*pqz;
-		float t = pqx*dx + pqz*dz;
-		if (d != 0) t /= d;
-		dx = p[0] + t*pqx - pt[0];
-		dz = p[2] + t*pqz - pt[2];
-		return dx*dx + dz*dz;
-	}
-	
-	// More or less copied from DetourDebugDraw::drawPolyBoundaries
-	DllExport void GetNavMeshTilesBoundaries(float* boundariesPositions, int* positionsCount, const void* navMeshHandle, const int maxCapacity, bool inner)
-	{
-		static const float thr = 0.01f*0.01f;
-
-		const dtNavMesh* navMesh = (const dtNavMesh*)navMeshHandle;
-
-		for (int i = 0; i < navMesh->getMaxTiles(); ++i)
-		{
-			const dtMeshTile* tile = navMesh->getTile(i);
-			if (!tile->header) continue;
-			
-
-			for (int i = 0; i < tile->header->polyCount; ++i)
-			{
-				const dtPoly* p = &tile->polys[i];
-		
-				if (p->getType() == DT_POLYTYPE_OFFMESH_CONNECTION) continue;
-		
-				const dtPolyDetail* pd = &tile->detailMeshes[i];
-		
-				for (int j = 0, nj = (int)p->vertCount; j < nj; ++j)
-				{
-					if (inner)
-					{
-						if (p->neis[j] == 0) continue;
-						if ((p->neis[j] & DT_EXT_LINK) == 0)
-						{
-							// This is not a border
-							continue;
-						}
-					}
-					else
-					{
-						if (p->neis[j] != 0) continue;
-					}
-					
-					const float* v0 = &tile->verts[p->verts[j]*3];
-					const float* v1 = &tile->verts[p->verts[(j+1) % nj]*3];
-			
-					// Draw detail mesh edges which align with the actual poly edge.
-					// This is really slow.
-					for (int k = 0; k < pd->triCount; ++k)
-					{
-						const unsigned char* t = &tile->detailTris[(pd->triBase+k)*4];
-						const float* tv[3];
-						for (int m = 0; m < 3; ++m)
-						{
-							if (t[m] < p->vertCount)
-								tv[m] = &tile->verts[p->verts[t[m]]*3];
-							else
-								tv[m] = &tile->detailVerts[(pd->vertBase+(t[m]-p->vertCount))*3];
-						}
-						for (int m = 0, n = 2; m < 3; n=m++)
-						{
-							if ((dtGetDetailTriEdgeFlags(t[3], n) & DT_DETAIL_EDGE_BOUNDARY) == 0)
-								continue;
-
-							if (distancePtLine2d(tv[n],v0,v1) < thr &&
-								distancePtLine2d(tv[m],v0,v1) < thr)
-							{
-								if (*positionsCount + 2 < maxCapacity)
-								{
-									boundariesPositions[(*positionsCount)] = tv[n][0];
-									boundariesPositions[(*positionsCount + 1)] = tv[n][1];
-									boundariesPositions[(*positionsCount + 2)] = tv[n][2];
-									*positionsCount += 3;
-								}
-								if (*positionsCount + 2 < maxCapacity)
-								{
-									boundariesPositions[(*positionsCount)] = tv[m][0];
-									boundariesPositions[(*positionsCount + 1)] = tv[m][1];
-									boundariesPositions[(*positionsCount + 2)] = tv[m][2];
-									*positionsCount += 3;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
 }
