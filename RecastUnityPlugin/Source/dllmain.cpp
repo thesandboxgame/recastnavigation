@@ -33,23 +33,23 @@ extern "C"
 		return RecastUnityPluginManager::initialize();
 	}
 
-	DllExport void Dispose()
+	DllExport void Dispose(int environmentId)
 	{
-		RecastUnityPluginManager::dispose();
+		RecastUnityPluginManager::dispose(environmentId);
 	}
 	
 	// Allocate Navmesh 
-	DllExport dtStatus CreateNavMesh(const void* config, const float* bmin, const float* bmax, const void* inputGeometry, void*& allocatedNavMesh)
+	DllExport dtStatus CreateNavMesh(const void* config, const float* bmin, const float* bmax, const void* inputGeometry, void*& allocatedNavMesh, int environmentId)
 	{
-		return RecastUnityPluginManager::createNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh);
+		return RecastUnityPluginManager::createNavMesh(*((const NavMeshBuildConfig*)config), bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry), allocatedNavMesh, environmentId);
 	}
 
 	// Creates an empty TileNavMesh
 	DllExport dtStatus CreateTileNavMesh(const void* config, float tileSize,
-	const float* bmin, const float* bmax, void*& allocatedNavMesh, int* tilesCount)
+	const float* bmin, const float* bmax, void*& allocatedNavMesh, int* tilesCount, int environmentId)
 	{
 		return RecastUnityPluginManager::createTileNavMesh(*((const NavMeshBuildConfig*)config), tileSize,
-			bmin, bmax, allocatedNavMesh, tilesCount);
+			bmin, bmax, allocatedNavMesh, tilesCount, environmentId);
 	}
 
 	DllExport void AddTile(int* tilesCoordinates, const void* config, float tileSize,
@@ -66,11 +66,11 @@ extern "C"
 	// Creates a TileNavMesh from some global mesh data.
 	DllExport dtStatus CreateTileNavMeshWithChunkyMesh(const void* config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
-		const void* inputGeometry, void*& allocatedNavMesh, void*&computedChunkyTriMesh, int* tilesCount)
+		const void* inputGeometry, void*& allocatedNavMesh, void*&computedChunkyTriMesh, int* tilesCount, int environmentId)
 	{
 		return RecastUnityPluginManager::createTileNavMeshWithChunkyMesh(*((const NavMeshBuildConfig*)config), tileSize, buildAllTiles,
 			bmin, bmax, *((const NavMeshInputGeometry*)inputGeometry),
-			allocatedNavMesh, computedChunkyTriMesh, tilesCount);
+			allocatedNavMesh, computedChunkyTriMesh, tilesCount, environmentId);
 	}
 
 	DllExport void AddTileWithChunkyMesh(int* tilesCoordinates, const void* config, float tileSize,
@@ -83,11 +83,11 @@ extern "C"
 	}
 	
 	// Dispose Navmesh
-	DllExport void DisposeNavMesh(void* allocatedNavMesh)
+	DllExport void DisposeNavMesh(void* allocatedNavMesh, int environmentId)
 	{
 		if (allocatedNavMesh != nullptr)
 		{
-			RecastUnityPluginManager::disposeNavMesh(allocatedNavMesh);
+			RecastUnityPluginManager::disposeNavMesh(allocatedNavMesh, environmentId);
 		}
 	}
 
@@ -101,17 +101,17 @@ extern "C"
 	}
 	
 	// Create Navmesh query (from a specific navmesh)
-	DllExport dtStatus CreateNavMeshQuery(const void* navMesh, int maxNodes, void*& allocatedNavMeshQuery)
+	DllExport dtStatus CreateNavMeshQuery(const void* navMesh, int maxNodes, void*& allocatedNavMeshQuery, int environmentId)
 	{
-		return RecastUnityPluginManager::createNavMeshQuery(navMesh, maxNodes, allocatedNavMeshQuery);
+		return RecastUnityPluginManager::createNavMeshQuery(navMesh, maxNodes, allocatedNavMeshQuery, environmentId);
 	}
 	
 	// Dispose Navmesh query
-	DllExport void DisposeNavMeshQuery(void* allocatedNavMeshQuery)
+	DllExport void DisposeNavMeshQuery(void* allocatedNavMeshQuery, int environmentId)
 	{
 		if (allocatedNavMeshQuery != nullptr)
 		{
-			RecastUnityPluginManager::disposeNavMeshQuery(allocatedNavMeshQuery);
+			RecastUnityPluginManager::disposeNavMeshQuery(allocatedNavMeshQuery, environmentId);
 		}
 	}
 

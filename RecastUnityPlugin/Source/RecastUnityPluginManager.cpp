@@ -51,35 +51,44 @@ bool RecastUnityPluginManager::isInitialized()
 	return s_instance != nullptr;
 }
 
-void RecastUnityPluginManager::dispose()
+void RecastUnityPluginManager::dispose(int environmentId)
 {
 	// TODO add a locking mechanism? Even though these methods should be called only on the main thread.
 	if (isInitialized())
 	{
-		s_instance->disposeData();
-		delete s_instance;
-		s_instance = nullptr;
+		s_instance->disposeData(environmentId);
+		if (s_instance->m_navMeshes.empty())
+		{
+			delete s_instance;
+			s_instance = nullptr;
+		}
 	}
 }
 
-void RecastUnityPluginManager::disposeData()
+void RecastUnityPluginManager::disposeData(int environmentId)
 {
-	for (auto navmesh : m_navMeshes)
+	for (auto entry : m_navMeshes)
 	{
-		dtFreeNavMesh(navmesh);
+		if (entry.first == environmentId)
+		{
+			dtFreeNavMesh(entry.second);
+		}
 	}
-	m_navMeshes.clear();	
+	m_navMeshes.erase(environmentId);
 
-	for (auto query : m_navMeshQueries)
+	for (auto entry : m_navMeshQueries)
 	{
-		dtFreeNavMeshQuery(query);
+		if (entry.first == environmentId)
+		{
+			dtFreeNavMeshQuery(entry.second);
+		}
 	}
-	m_navMeshQueries.clear();	
+	m_navMeshQueries.erase(environmentId);	
 }
 
 // More or less copied from Sample_SoloMesh.cpp
 dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh)
+	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int environmentId)
 {
 	if (!isInitialized())
 	{
@@ -288,7 +297,7 @@ dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& confi
 	buildData.ownsNavData = false;
 	
 	// Store the allocated navmesh.
-	s_instance->m_navMeshes.push_back(navMesh);
+	s_instance->m_navMeshes.insert({environmentId, navMesh});
 
 	allocatedNavMesh = navMesh;
 	
@@ -298,7 +307,7 @@ dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& confi
 // More or less copied from Sample_TileMesh.cpp
 dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& config, float tileSize,
 	const float* bmin, const float* bmax,
-	void*& allocatedNavMesh, int* tilesNumber)
+	void*& allocatedNavMesh, int* tilesNumber, int environmentId)
 {
 		if (!isInitialized())
 	{
@@ -347,7 +356,7 @@ dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& c
 	}
 	
 	// Store the allocated navmesh.
-	s_instance->m_navMeshes.push_back(navMesh);
+	s_instance->m_navMeshes.insert({environmentId, navMesh});
 
 	allocatedNavMesh = navMesh;
 		
@@ -357,7 +366,7 @@ dtStatus RecastUnityPluginManager::createTileNavMesh(const NavMeshBuildConfig& c
 
 dtStatus RecastUnityPluginManager:: createTileNavMeshWithChunkyMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 	const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber)
+	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber, int environmentId)
 {
 	if (!isInitialized())
 	{
@@ -440,7 +449,7 @@ dtStatus RecastUnityPluginManager:: createTileNavMeshWithChunkyMesh(const NavMes
 	}
 
 	// Store the allocated navmesh.
-	s_instance->m_navMeshes.push_back(navMesh);
+	s_instance->m_navMeshes.insert({environmentId, navMesh});
 
 	allocatedNavMesh = navMesh;
 		
@@ -1110,7 +1119,7 @@ unsigned char* RecastUnityPluginManager::buildTileMeshWithChunkyMesh(const int t
 	return navData;
 }
 
-void RecastUnityPluginManager::disposeNavMesh(void* allocatedNavMesh)
+void RecastUnityPluginManager::disposeNavMesh(void* allocatedNavMesh, int environmentId)
 {
 	if (allocatedNavMesh == nullptr)
 	{
@@ -1118,23 +1127,29 @@ void RecastUnityPluginManager::disposeNavMesh(void* allocatedNavMesh)
 	}
 	
 	auto navMesh = (dtNavMesh*)allocatedNavMesh;
-	auto navMeshIterator = std::find(s_instance->m_navMeshes.begin(), s_instance->m_navMeshes.end(), navMesh);
-	if (navMeshIterator != s_instance->m_navMeshes.end())
-	{
-		s_instance->m_navMeshes.erase(navMeshIterator);
-	}
+	// Find the element 
+	auto it = std::find_if( 
+		s_instance->m_navMeshes.begin(), s_instance->m_navMeshes.end(), [&](const auto& pair) { 
+			return pair.first == environmentId 
+				   && pair.second == navMesh; 
+		}); 
+  
+	// If found, erase it 
+	if (it != s_instance->m_navMeshes.end()) { 
+		s_instance->m_navMeshes.erase(it); 
+	} 
 
 	dtFreeNavMesh(navMesh);
 }
 
 
-dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery)
+dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery, int environmentId)
 {
 	auto navMeshQuery = dtAllocNavMeshQuery();
 	if (navMeshQuery != nullptr)
 	{
 		// Store the allocated navmesh query.
-		s_instance->m_navMeshQueries.push_back(navMeshQuery);
+		s_instance->m_navMeshQueries.insert({environmentId, navMeshQuery});
 		navMeshQuery->init((const dtNavMesh*)allocatedNavMesh, maxNodes);
 		allocatedNavMeshQuery = navMeshQuery;
 		return DT_SUCCESS;
@@ -1143,7 +1158,7 @@ dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* allocatedNavMe
 	return DT_FAILURE;
 }
 
-void RecastUnityPluginManager::disposeNavMeshQuery(void*& allocatedNavMeshQuery)
+void RecastUnityPluginManager::disposeNavMeshQuery(void*& allocatedNavMeshQuery, int environmentId)
 {
 	if (allocatedNavMeshQuery == nullptr)
 	{
@@ -1151,12 +1166,18 @@ void RecastUnityPluginManager::disposeNavMeshQuery(void*& allocatedNavMeshQuery)
 	}
 	
 	auto navMeshQuery = (dtNavMeshQuery*)allocatedNavMeshQuery;
-	auto navMeshQueryIterator = std::find(s_instance->m_navMeshQueries.begin(), s_instance->m_navMeshQueries.end(), navMeshQuery);
-	if (navMeshQueryIterator != s_instance->m_navMeshQueries.end())
-	{
-		s_instance->m_navMeshQueries.erase(navMeshQueryIterator);
-	}
-
+	// Find the element 
+	auto it = std::find_if( 
+		s_instance->m_navMeshQueries.begin(), s_instance->m_navMeshQueries.end(), [&](const auto& pair) { 
+			return pair.first == environmentId 
+				   && pair.second == navMeshQuery; 
+		}); 
+  
+	// If found, erase it 
+	if (it != s_instance->m_navMeshQueries.end()) { 
+		s_instance->m_navMeshQueries.erase(it); 
+	} 
+	
 	dtFreeNavMeshQuery(navMeshQuery);
 	allocatedNavMeshQuery = nullptr;
 }

@@ -1,6 +1,7 @@
 ﻿#ifndef RECAST_UNITY_PLUGIN_MANAGER_H
 #define RECAST_UNITY_PLUGIN_MANAGER_H
 
+#include <map>
 #include <vector>
 
 #include "BlockArea.h"
@@ -55,39 +56,39 @@ public:
 	static bool initialize();
 	
 	/// Disposes the singleton and free its data.
-	static void dispose();
+	static void dispose(int environmentId);
 
 	static bool isInitialized();
 		
 	static dtStatus createNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
-		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh);
+		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int environmentId);
 
-	static void disposeNavMesh(void* allocatedNavMesh);
+	static void disposeNavMesh(void* allocatedNavMesh, int environmentId);
 
 	static dtStatus createTileNavMesh(const NavMeshBuildConfig& config, float tileSize,
 		const float* bmin, const float* bmax,
-		void*& allocatedNavMesh, int* tilesNumber);
+		void*& allocatedNavMesh, int* tilesNumber, int environmentId);
 	
 	static void addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
 			   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount, BuildContext* context);
 	
 	static dtStatus createTileNavMeshWithChunkyMesh(const NavMeshBuildConfig& config, float tileSize, bool buildAllTiles,
 		const float* bmin, const float* bmax,
-		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber);
+		const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, void*& computedChunkyTriMesh, int* tilesNumber, int environmentId);
 
 	static void addTileWithChunkyMesh(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
 				   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const rcChunkyTriMesh* chunkyMesh, bool dontRecomputeBounds = false);
 	
-	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery);
+	static dtStatus createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery, int environmentId);
 
-	static void disposeNavMeshQuery(void*& allocatedNavMeshQuery);
+	static void disposeNavMeshQuery(void*& allocatedNavMeshQuery, int environmentId);
 	
 private:
 	/// Made it private so that nobody can call the constructor outside of this class.
 	RecastUnityPluginManager() {}
 
 	/// Free the navmeshes and the navmesh queries.
-	void disposeData();
+	void disposeData(int environmentId);
 
 	static dtStatus BuildAllTiles(dtNavMesh* navMesh, const NavMeshBuildConfig& config, float tileSize,
 	                              const float* bmin, const float* bmax,
@@ -105,9 +106,9 @@ private:
 	static RecastUnityPluginManager* s_instance;
 
 	/// All the navmeshes that were allocated for the C# side.
-	std::vector<dtNavMesh*> m_navMeshes;
+	std::multimap<int, dtNavMesh*> m_navMeshes;
 
 	/// All the navmesh queries that were allocated for the C# side.
-	std::vector<dtNavMeshQuery*> m_navMeshQueries;
+	std::multimap<int, dtNavMeshQuery*> m_navMeshQueries;
 };
 #endif
