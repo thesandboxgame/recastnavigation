@@ -28,11 +28,14 @@ extern "C"
 {
 	const int PATH_MAX_CAPACITY = 256;
 
+	/// Initializes the plugin. Yoy must call it before using it.
+	/// Returns false if it was already initialized.
 	DllExport bool Initialize()
 	{
 		return RecastUnityPluginManager::initialize();
 	}
-
+	
+	/// Dispose the data linked to an environment. Used to make sure all the NavMeshes and NavMeshQueries are properly disposed.
 	DllExport void Dispose(int environmentId)
 	{
 		RecastUnityPluginManager::dispose(environmentId);
@@ -158,7 +161,7 @@ extern "C"
 
 	/**
 	 * \brief Computes a path. Calls FindPath then FindStraightPath.
-	 * \param navMeshQuery The navmesh query to used (references the navmesh).
+	 * \param navMeshQuery The navmesh query to use (references the navmesh).
 	 * \param startPosition The start position of the path.
 	 * \param endPosition The end position of the path.
 	 * \param polygonSearchExtents The search extents to use when trying to find a suitable polygon for the start and end positions.
