@@ -3,11 +3,12 @@
 #include "Recast.h"
 
 // Inspired by BuildContext in SampleInterfaces
+/// A context to be able to gather the timings. The logs are not supported for the time being.
 class BuildContext : public rcContext
 {
 public:
 	BuildContext(TimeVal* m_accTimeUSec);
-	
+
 	/// Dumps the log to stdout.
 	void dumpLog(const char* format, ...);
 	/// Returns number of log messages.
@@ -16,8 +17,8 @@ public:
 	const char* getLogText(const int i) const;
 
 	void computeAllTimings();
-	
-protected:	
+
+protected:
 	/// Virtual functions for custom implementations.
 	///@{
 	virtual void doResetLog();

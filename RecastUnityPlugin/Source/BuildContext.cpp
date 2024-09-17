@@ -6,9 +6,13 @@ BuildContext::BuildContext(TimeVal* accTimeUSec) : m_accTimeUSec(accTimeUSec)
 }
 
 // Virtual functions for custom implementations.
-void BuildContext::doResetLog(){}
+void BuildContext::doResetLog()
+{
+}
 
-void BuildContext::doLog(const rcLogCategory category, const char* msg, const int len){}
+void BuildContext::doLog(const rcLogCategory category, const char* msg, const int len)
+{
+}
 
 void BuildContext::doResetTimers()
 {
@@ -36,7 +40,9 @@ int BuildContext::doGetAccumulatedTime(const rcTimerLabel label) const
 	return getPerfTimeUsec(m_accTime[label]);
 }
 
-void BuildContext::dumpLog(const char* format, ...){}
+void BuildContext::dumpLog(const char* format, ...)
+{
+}
 
 int BuildContext::getLogCount() const
 {

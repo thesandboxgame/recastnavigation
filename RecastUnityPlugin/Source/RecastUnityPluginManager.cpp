@@ -88,7 +88,7 @@ void RecastUnityPluginManager::disposeData(int environmentId)
 
 // More or less copied from Sample_SoloMesh.cpp
 dtStatus RecastUnityPluginManager::createNavMesh(const NavMeshBuildConfig& config, const float* bmin, const float* bmax,
-	const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int environmentId)
+                                                 const NavMeshInputGeometry& inputGeometry, void*& allocatedNavMesh, int environmentId)
 {
 	if (!isInitialized())
 	{
@@ -456,7 +456,7 @@ dtStatus RecastUnityPluginManager:: createTileNavMeshWithChunkyMesh(const NavMes
 	return DT_SUCCESS;
 }
 
-void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
+void RecastUnityPluginManager::addTile(const int* tileCoordinates, const NavMeshBuildConfig& config, float tileSize, const float* bmin, const float* bmax,
 		   const NavMeshInputGeometry& inputGeometry, dtNavMesh* navMesh, const BlockArea* blockAreas, int blocksCount, BuildContext* context)
 {
 	int gw = 0, gh = 0;
@@ -466,8 +466,8 @@ void RecastUnityPluginManager::addTile(const int* tileCoordinate, const NavMeshB
 	float lastBuiltTileBmin[3];
 	float lastBuiltTileBmax[3];
 
-	int x = tileCoordinate[0];
-	int y = tileCoordinate[1];
+	int x = tileCoordinates[0];
+	int y = tileCoordinates[1];
 
 	// TODO: expose some method to get these bounds in the C# side.
 	lastBuiltTileBmin[0] = bmin[0] + x*tcs;
@@ -1143,14 +1143,14 @@ void RecastUnityPluginManager::disposeNavMesh(void* allocatedNavMesh, int enviro
 }
 
 
-dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* allocatedNavMesh, int maxNodes, void*& allocatedNavMeshQuery, int environmentId)
+dtStatus RecastUnityPluginManager::createNavMeshQuery(const void* navMesh, int maxNodes, void*& allocatedNavMeshQuery, int environmentId)
 {
 	auto navMeshQuery = dtAllocNavMeshQuery();
 	if (navMeshQuery != nullptr)
 	{
 		// Store the allocated navmesh query.
 		s_instance->m_navMeshQueries.insert({environmentId, navMeshQuery});
-		navMeshQuery->init((const dtNavMesh*)allocatedNavMesh, maxNodes);
+		navMeshQuery->init((const dtNavMesh*)navMesh, maxNodes);
 		allocatedNavMeshQuery = navMeshQuery;
 		return DT_SUCCESS;
 	}

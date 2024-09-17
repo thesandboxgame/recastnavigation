@@ -13,25 +13,33 @@ enum BoundaryType
 /// Should be in sync with the C# side.
 struct NavMeshDebugDrawData
 {
+	/// The positions of all the vertices from the polygon triangles (3 items per vertex).
 	float* polyTrianglesPositions;
+	/// The area of all the polygon triangles.
 	unsigned char* polyTrianglesArea;
+	/// The number of polygon triangles.
 	int* polyTrianglesCount;
+	/// The max number of polygon triangles that the data can gather.
 	int polyTrianglesMaxCapacity;
 
+	/// The boundaries positions (3 items per position). The positions are organised line by line (2 positions per line)
 	float* boundariesPositions;
+	/// The type of boundary for each line.
 	unsigned char* boundariesType;
+	/// The number of lines that were gathered.
 	int* boundariesLinesCount;
+	/// The max number of boundary lines that the data can gather.
 	int boundariesMaxCapacity;
 
-	bool addPolyTriangle(const float** positions, unsigned char area)
+	bool addPolyTriangle(const float** positions, const unsigned char area)
 	{
 		if (*polyTrianglesCount == polyTrianglesMaxCapacity - 1)
 		{
 			// Can't add anymore triangles.
 			return false;
 		}
-		
-		int offset = *polyTrianglesCount * 9;
+
+		const int offset = *polyTrianglesCount * 9;
 		for (int i = 0; i < 3; ++i)
 		{
 			polyTrianglesPositions[offset + i * 3] = positions[i][0];
@@ -40,13 +48,13 @@ struct NavMeshDebugDrawData
 		}
 
 		polyTrianglesArea[*polyTrianglesCount] = area;
-		
+
 		(*polyTrianglesCount)++;
-		
+
 		return true;
 	}
 
-	bool addBoundary(const float** positions, BoundaryType boundaryType)
+	bool addBoundary(const float** positions, const BoundaryType boundaryType)
 	{
 		if (*boundariesLinesCount == boundariesMaxCapacity - 1)
 		{
@@ -63,9 +71,9 @@ struct NavMeshDebugDrawData
 		}
 
 		boundariesType[*boundariesLinesCount] = boundaryType;
-		
+
 		(*boundariesLinesCount)++;
-		
+
 		return true;
 	}
 };
@@ -75,12 +83,12 @@ struct NavMeshDebugDrawData
 class NavMeshDebugDrawUtility
 {
 public:
-	static bool fetchTileNavMeshDebugDrawData(const dtNavMesh& mesh, NavMeshDebugDrawData* debugDrawData); 
+	static bool fetchTileNavMeshDebugDrawData(const dtNavMesh& mesh, NavMeshDebugDrawData* debugDrawData);
 
 private:
 	static bool fetchMeshTileData(const dtNavMesh& mesh, const dtMeshTile* tile, NavMeshDebugDrawData* debugDrawData);
 
 	static bool fetchMeshBoundariesData(const dtMeshTile* tile, NavMeshDebugDrawData* debugDrawData);
-	
+
 	static float distancePtLine2d(const float* pt, const float* p, const float* q);
 };

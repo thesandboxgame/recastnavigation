@@ -23,6 +23,8 @@
 // Win32
 #include <windows.h>
 
+// Copied the code from RecastDemo
+
 TimeVal getPerfTime()
 {
 	__int64 count;

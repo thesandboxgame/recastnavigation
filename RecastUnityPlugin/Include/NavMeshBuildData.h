@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "ChunkyTriMesh.h"
 #include "Recast.h"
 #include "DetourAlloc.h"
 
@@ -70,6 +69,7 @@ struct NavMeshBuildData
 	rcPolyMesh* pmesh;
 	rcPolyMeshDetail* dmesh;
 	unsigned char* navData;
+	/// True if the NavMeshBuildData owns the NavData, otherwise the owner is now a NavMesh.
 	bool ownsNavData;
 
 private:

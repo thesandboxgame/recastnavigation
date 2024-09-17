@@ -16,6 +16,7 @@
 // 3. This notice may not be removed or altered from any source distribution.
 //
 
+// Copied the code from RecastDemo
 #ifndef PERFTIMER_H
 #define PERFTIMER_H
 
@@ -30,4 +31,3 @@ TimeVal getPerfTime();
 int getPerfTimeUsec(const TimeVal duration);
 
 #endif // PERFTIMER_H
-
