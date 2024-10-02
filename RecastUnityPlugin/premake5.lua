@@ -19,7 +19,7 @@ workspace "recastnavigation"
 	rtti "Off"
 	symbols "On"
 	flags { "FatalCompileWarnings" }
-	cppdialect "C++98"
+	cppdialect "C++14"
 
 	-- debug configs
 	filter "configurations:Debug"
@@ -166,11 +166,4 @@ project "RecastUnityPlugin"
 	filter "system:windows"
 		debugdir "../RecastUnityPlugin/Bin/"
 		links { }
-
-	-- mac includes and libs
-	filter "system:macosx"
-		kind "ConsoleApp" -- xcode4 failes to run the project if using WindowedApp
-		links { 
-			"Cocoa.framework",
-		}
 

@@ -1,4 +1,6 @@
+#if defined(WIN32)
 #include <windows.h>
+#endif
 #include <stdint.h>
 
 #include "BlockArea.h"
@@ -8,6 +10,7 @@
 #include "NavMeshDebugDrawUtility.h"
 #include "RecastUnityPluginManager.h"
 
+#if defined(WIN32)
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
@@ -23,6 +26,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 }
 
 #define DllExport __declspec(dllexport)
+#else
+#if _MSC_VER // this is defined when compiling with Visual Studio
+#define DllExport __declspec(dllexport) // Visual Studio needs annotating exported functions with this
+#else
+#define DllExport // XCode does not need annotating exported functions, so define is empty
+#endif
+#endif
 
 extern "C"
 {

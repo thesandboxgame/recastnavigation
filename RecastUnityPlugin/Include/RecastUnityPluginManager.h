@@ -1,10 +1,11 @@
-﻿#ifndef RECAST_UNITY_PLUGIN_MANAGER_H
+#ifndef RECAST_UNITY_PLUGIN_MANAGER_H
 #define RECAST_UNITY_PLUGIN_MANAGER_H
 
 #include <map>
 #include "BlockArea.h"
 #include "BuildContext.h"
 #include "DetourNavMesh.h"
+#include "DetourNavMeshQuery.h"
 #include "NavMeshBuildConfig.h"
 #include "NavMeshInputGeometry.h"
 #include "Recast.h"

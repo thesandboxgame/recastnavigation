@@ -1,4 +1,4 @@
-﻿#include "../Include/RecastUnityPluginManager.h"
+#include "../Include/RecastUnityPluginManager.h"
 
 #include "ChunkyTriMesh.h"
 #include "DetourNavMeshBuilder.h"
