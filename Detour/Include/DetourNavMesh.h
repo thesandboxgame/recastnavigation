@@ -22,6 +22,9 @@
 #include "DetourAlloc.h"
 #include "DetourStatus.h"
 
+// Modification Sandbox
+#include <mutex>
+
 // Undefine (or define in a build config) the following line to use 64bit polyref.
 // Generally not needed, useful for very large worlds.
 // Note: tiles build using 32bit refs are not compatible with 64bit refs!
@@ -607,6 +610,9 @@ public:
 	}
 
 	/// @}
+
+	// Modification Sandbox
+	std::mutex mutex;
 	
 private:
 	// Explicitly disabled copy constructor and copy assignment operator.
