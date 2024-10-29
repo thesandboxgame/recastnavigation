@@ -78,7 +78,8 @@ project "Detour"
 	filter {"system:linux", "toolset:gcc"}
 		buildoptions {
 			"-Wno-error=class-memaccess",
-			"-Wno-error=maybe-uninitialized"
+			"-Wno-error=maybe-uninitialized",
+			"-fPIC"
 		}
 
 project "DetourCrowd"
@@ -117,6 +118,11 @@ project "Recast"
 		"../Recast/Include/*.h",
 		"../Recast/Source/*.cpp" 
 	}
+	-- linux library cflags and libs
+	filter {"system:linux", "toolset:gcc"}
+		buildoptions {
+			"-fPIC"
+		}
 
 project "RecastUnityPlugin"
 	language "C++"

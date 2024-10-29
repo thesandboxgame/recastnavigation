@@ -16,9 +16,8 @@ bool NavMeshDebugDrawUtility::fetchTileNavMeshDebugDrawData(const dtNavMesh& mes
 	return couldBufferContainAllData;
 }
 
-bool NavMeshDebugDrawUtility::fetchMeshTileData(const dtNavMesh& mesh, const dtMeshTile* tile, NavMeshDebugDrawData* debugDrawData)
+bool NavMeshDebugDrawUtility::fetchMeshTileData(const dtNavMesh& /*mesh*/, const dtMeshTile* tile, NavMeshDebugDrawData* debugDrawData)
 {
-	dtPolyRef base = mesh.getPolyRefBase(tile);
 	bool isDataBufferFull = false;
 	for (int i = 0; i < tile->header->polyCount; ++i)
 	{

@@ -6,6 +6,9 @@
 #include "NavMeshBuildData.h"
 #include "NavMeshBuildUtility.h"
 #include "Recast.h"
+#include <math.h>
+#include <cstring>
+#include <algorithm>
 
 RecastUnityPluginManager* RecastUnityPluginManager::s_instance= nullptr;
 
@@ -504,7 +507,6 @@ void RecastUnityPluginManager::addTileWithChunkyMesh(const int* tileCoordinate, 
 {
 	int gw = 0, gh = 0;
 	rcCalcGridSize(bmin, bmax, config.cs, &gw, &gh);
-	const int ts = (int)tileSize;
 	const float tcs = tileSize * config.cs;
 
 	float lastBuiltTileBmin[3];

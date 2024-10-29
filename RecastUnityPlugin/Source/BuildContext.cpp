@@ -10,7 +10,7 @@ void BuildContext::doResetLog()
 {
 }
 
-void BuildContext::doLog(const rcLogCategory category, const char* msg, const int len)
+void BuildContext::doLog(const rcLogCategory /*category*/, const char* /*msg*/, const int /*len*/)
 {
 }
 
@@ -40,7 +40,7 @@ int BuildContext::doGetAccumulatedTime(const rcTimerLabel label) const
 	return getPerfTimeUsec(m_accTime[label]);
 }
 
-void BuildContext::dumpLog(const char* format, ...)
+void BuildContext::dumpLog(const char* /*format*/, ...)
 {
 }
 
@@ -49,7 +49,7 @@ int BuildContext::getLogCount() const
 	return 0;
 }
 
-const char* BuildContext::getLogText(const int i) const
+const char* BuildContext::getLogText(const int /*i*/) const
 {
 	return nullptr;
 }
